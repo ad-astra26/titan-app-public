@@ -1,0 +1,21 @@
+# --- build / toolchain ---
+.gradle/
+build/
+**/build/
+local.properties
+.idea/
+*.iml
+captures/
+.kotlin/
+.cxx/
+
+# --- secrets / signing (NEVER commit) ---
+*.jks
+*.keystore
+keystore.properties
+secrets.properties
+google-services.json
+
+# --- os ---
+.DS_Store
+Thumbs.db
