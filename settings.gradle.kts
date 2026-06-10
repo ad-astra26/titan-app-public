@@ -28,4 +28,4 @@ dependencyResolutionManagement {
 rootProject.name = "titan-app"
 
 include(":shared")
-// include(":android")  // added in Phase 0 Step B (heavier — pulls AGP/Compose)
+include(":android")
