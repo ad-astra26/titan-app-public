@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,8 +19,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -106,23 +107,44 @@ fun PairingScreen(
 
 @Composable
 private fun NotPairedActions(onScan: () -> Unit, onPaste: () -> Unit) {
+    // "Pair your Titan" instructions → camera-first (scan is the primary action; the
+    // manual paste is demoted to a small fallback, per the camera-first product flow).
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = TitanSurfaceHi),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(20.dp)) {
+            Text(
+                "Pair your Titan",
+                color = TitanText,
+                fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(12.dp))
+            PairStep("1", "Open your Titan Command Center and sign in with your Maker wallet.")
+            PairStep("2", "Tap “Pair mobile device” to show a QR code.")
+            PairStep("3", "Point your camera at the QR — that’s all.")
+        }
+    }
+    Spacer(Modifier.height(20.dp))
     Button(
         onClick = onScan,
         modifier = Modifier.fillMaxWidth().height(54.dp),
         colors = ButtonDefaults.buttonColors(containerColor = TitanCyan, contentColor = TitanInk),
-    ) { Text("Scan pairing QR", fontWeight = FontWeight.SemiBold) }
-    Spacer(Modifier.height(12.dp))
-    OutlinedButton(
-        onClick = onPaste,
-        modifier = Modifier.fillMaxWidth().height(50.dp),
-    ) { Text("Paste pairing code", color = TitanText) }
-    Spacer(Modifier.height(16.dp))
-    Text(
-        "Open your Command Center → “Pair phone” to show the QR.",
-        style = MaterialTheme.typography.bodySmall,
-        color = TitanMuted,
-        textAlign = TextAlign.Center,
-    )
+    ) { Text("Scan QR code", fontWeight = FontWeight.SemiBold) }
+    Spacer(Modifier.height(8.dp))
+    TextButton(onClick = onPaste, modifier = Modifier.fillMaxWidth()) {
+        Text("Enter code manually", color = TitanMuted)
+    }
+}
+
+@Composable
+private fun PairStep(n: String, text: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text("$n  ", color = TitanCyan, fontWeight = FontWeight.Bold)
+        Text(text, color = TitanMuted, style = MaterialTheme.typography.bodyMedium)
+    }
 }
 
 @Composable

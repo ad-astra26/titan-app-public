@@ -54,7 +54,8 @@ class TitanController(
     private var pendingCode6: String? = null
 
     private fun baseUrl(): String = store.endpointUrl ?: DEFAULT_DEV_ENDPOINT
-    private fun client() = ConsoleClient(baseUrl(), AndroidHttpTransport())
+    // Pinned TLS (AG-TLS): the transport pins the QR's cert sha256 when present.
+    private fun client() = ConsoleClient(baseUrl(), AndroidHttpTransport(tlsPin = store.tlsPin))
 
     init {
         DeviceKey.existing(context, store, activityProvider)?.let { key ->
@@ -77,7 +78,17 @@ class TitanController(
             pairing = PairingUiState.Error("That QR isn’t a Titan pairing code.")
             return
         }
+        // AG-MODE/AG-TLS fail-closed: a remote QR MUST carry a TLS pin — never pair a
+        // remote Titan over an unpinned (sniffable/MITM-able) channel.
+        if (payload.mode == "remote" && payload.serverTlsPin.isNullOrBlank()) {
+            pairing = PairingUiState.Error(
+                "This remote pairing QR is missing its security pin — refusing to connect.",
+            )
+            return
+        }
         payload.endpointUrl?.let { store.endpointUrl = it }
+        store.tlsPin = payload.serverTlsPin
+        store.mode = payload.mode
         pairing = PairingUiState.Working("Generating your device key…")
         scope.launch {
             try {
