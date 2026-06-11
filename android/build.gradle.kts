@@ -19,6 +19,10 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            // DEV fallback (insecure seed store) is compiled ONLY in debug — see KeystoreDeviceKey.
+            isMinifyEnabled = false
+        }
         getByName("release") {
             isMinifyEnabled = false // signing/minify configured in a later phase
         }
@@ -29,6 +33,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -44,5 +49,12 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
+    implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
+    implementation(libs.compose.ui.tooling.preview)
+    debugImplementation(libs.compose.ui.tooling)
+    // Phase 1 (all FOSS — AD-7): device key, QR pairing, async chat.
+    implementation(libs.androidx.biometric)
+    implementation(libs.zxing.android.embedded)
+    implementation(libs.kotlinx.coroutines.android)
 }

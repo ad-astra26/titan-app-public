@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidLibrary)
+    alias(libs.plugins.kotlinSerialization)
 }
 
 kotlin {
@@ -16,8 +17,21 @@ kotlin {
     }
 
     sourceSets {
+        commonMain.dependencies {
+            implementation(libs.kotlinx.serialization.json)
+        }
         commonTest.dependencies {
             implementation(kotlin("test"))
+        }
+        // BouncyCastle Ed25519 — identical on both JVM (tests) and Android (app).
+        jvmMain.dependencies {
+            implementation(libs.bouncycastle)
+        }
+        androidMain.dependencies {
+            implementation(libs.bouncycastle)
+        }
+        jvmTest.dependencies {
+            implementation(libs.kotlinx.coroutines.core) // runBlocking for the suspend signing test
         }
     }
 }

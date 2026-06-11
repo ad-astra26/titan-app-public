@@ -5,17 +5,34 @@ androidxCore = "1.13.1"
 androidxActivityCompose = "1.9.3"
 composeBom = "2024.10.01"
 biometric = "1.2.0-alpha05"
-camerax = "1.3.4"
-mlkitBarcode = "17.3.0"
+# QR = ZXing (Apache-2.0, FOSS) — self-contained scanner; NOT GMS ML Kit (F-Droid
+# Non-Free-Dependency, rejection-grade). One APK ships to Play AND F-Droid. AD-7.
+zxingEmbedded = "4.3.0"
+# Ed25519 signing over a Keystore-sealed seed (AG3); AndroidKeyStore has no portable
+# Ed25519 < API 33. BouncyCastle (bcprov-jdk18on) = MIT-style FOSS.
+bouncycastle = "1.78.1"
+# JSON for the wire payloads (pairing/chat). kotlinx.serialization = Apache-2.0 FOSS.
+kotlinxSerialization = "1.7.3"
+# Coroutines — runBlocking in jvmTest for the suspend signing-path test. Apache-2.0.
+kotlinxCoroutines = "1.8.1"
 
 [libraries]
-# --- Android (wired in Phase 0 Step B with the :android module) ---
+# --- Android UI (wired in Phase 0 Step B with the :android module) ---
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivityCompose" }
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 compose-ui = { module = "androidx.compose.ui:ui" }
+compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+compose-foundation = { module = "androidx.compose.foundation:foundation" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
+# --- Phase 1: device key, QR pairing, chat (all FOSS — AD-7) ---
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
+zxing-android-embedded = { module = "com.journeyapps:zxing-android-embedded", version.ref = "zxingEmbedded" }
+bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "bouncycastle" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
@@ -23,3 +40,4 @@ androidApplication = { id = "com.android.application", version.ref = "agp" }
 androidLibrary = { id = "com.android.library", version.ref = "agp" }
 kotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

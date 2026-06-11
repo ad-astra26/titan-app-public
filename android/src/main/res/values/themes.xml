@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Compose draws the UI; the XML theme only needs to be a valid no-action-bar host. -->
-    <style name="Theme.Titan" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Compose draws the UI; the XML theme is only the no-action-bar host. Dark
+         windowBackground avoids a white flash before Compose's dark theme paints. -->
+    <style name="Theme.Titan" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0B0E14</item>
+        <item name="android:statusBarColor">#0B0E14</item>
+        <item name="android:navigationBarColor">#0B0E14</item>
+    </style>
 </resources>

@@ -1,11 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Reach the Console Agent over Tailscale / nginx-TLS / localhost. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- QR pairing (CameraX-free ZXing scanner). Runtime-requested; optional hardware. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
     <application
         android:allowBackup="false"
         android:label="Titan"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.Titan">
+        <!-- usesCleartextTraffic: the Tailscale tailnet is WireGuard-encrypted end to end,
+             and localhost dev is loopback; the nginx fallback host uses TLS. -->
         <activity
             android:name=".MainActivity"
             android:exported="true">
