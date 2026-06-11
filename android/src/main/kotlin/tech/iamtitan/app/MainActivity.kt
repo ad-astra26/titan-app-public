@@ -1,5 +1,6 @@
 package tech.iamtitan.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,8 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
-import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanOptions
+import com.google.zxing.integration.android.IntentIntegrator
 import tech.iamtitan.app.ui.ChatScreen
 import tech.iamtitan.app.ui.PairingScreen
 import tech.iamtitan.app.ui.TitanInk
@@ -26,45 +26,65 @@ import tech.iamtitan.app.ui.TitanTheme
 
 /**
  * Single-activity host (FragmentActivity for BiometricPrompt). All screen state
- * lives in [TitanController]; this only wires the QR scanner + paste dialog.
+ * lives in [TitanController].
+ *
+ * QR scan launches via ZXing's classic [IntentIntegrator] + [onActivityResult]
+ * (request code 0xc0de = 49374, within 16 bits) rather than the Compose
+ * ActivityResult API: the result registry generates a >16-bit request code, which
+ * `FragmentActivity.startActivityForResult` rejects ("Can only use lower 16 bits
+ * for requestCode"). We need FragmentActivity (BiometricPrompt), so we use the
+ * 16-bit-safe classic path.
  */
 class MainActivity : FragmentActivity() {
+    private lateinit var controller: TitanController
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val controller = TitanController(this, lifecycleScope)
+        controller = TitanController(this, lifecycleScope)
         setContent {
             TitanTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = TitanInk) {
-                    TitanApp(controller)
+                    TitanApp(controller, onScan = ::launchScan)
                 }
             }
         }
-        // DEBUG-only: inject a pairing payload over adb for headless emulator testing
-        // (RFP §5 manual-endpoint dev menu). `am start … -e pair_payload '<json>'`.
+        // DEBUG-only: inject a pairing payload over adb for headless emulator testing.
         if (BuildConfig.DEBUG) {
             intent?.getStringExtra("pair_payload")?.let(controller::onScanned)
+        }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun launchScan() {
+        IntentIntegrator(this).apply {
+            setOrientationLocked(false)
+            setBeepEnabled(false)
+            setPrompt("Scan the Titan pairing QR")
+            setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
+            captureActivity = com.journeyapps.barcodescanner.CaptureActivity::class.java
+        }.initiateScan()
+    }
+
+    @Deprecated("ZXing classic result path — FragmentActivity-safe (16-bit request code)")
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        val result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data)
+        if (result != null) {
+            result.contents?.let(controller::onScanned)
+        } else {
+            super.onActivityResult(requestCode, resultCode, data)
         }
     }
 }
 
 @Composable
-private fun TitanApp(controller: TitanController) {
-    val scanLauncher = androidx.activity.compose.rememberLauncherForActivityResult(ScanContract()) { result ->
-        result.contents?.let { controller.onScanned(it) }
-    }
+private fun TitanApp(controller: TitanController, onScan: () -> Unit) {
     var showPaste by remember { mutableStateOf(false) }
 
     when (controller.screen) {
         Screen.Pairing -> PairingScreen(
             state = controller.pairing,
-            onScan = {
-                scanLauncher.launch(
-                    ScanOptions()
-                        .setOrientationLocked(false)
-                        .setBeepEnabled(false)
-                        .setPrompt("Scan the Titan pairing QR"),
-                )
-            },
+            onScan = onScan,
             onPaste = { showPaste = true },
             onRetry = controller::onRetry,
             onConfirmed = controller::onConfirmed,

@@ -1,10 +1,20 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.kotlinAndroid)
     alias(libs.plugins.composeCompiler)
 }
+
+// Release signing (secret-managed, AD-7): the keystore + its creds live OUTSIDE both repos at
+// ~/.titan/titan-app-keystore.properties (storeFile/storePassword/keyAlias/keyPassword). Absent
+// ⇒ the release build stays unsigned (debug + CI-without-secrets still work). Never committed.
+val keystorePropsFile = File(System.getProperty("user.home"), ".titan/titan-app-keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) keystorePropsFile.inputStream().use { load(it) }
+}
+val hasReleaseSigning = keystoreProps.containsKey("storeFile")
 
 android {
     namespace = "tech.iamtitan.app"
@@ -14,8 +24,19 @@ android {
         applicationId = "tech.iamtitan.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.1.1"
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = File(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
     }
 
     buildTypes {
@@ -24,7 +45,10 @@ android {
             isMinifyEnabled = false
         }
         getByName("release") {
-            isMinifyEnabled = false // signing/minify configured in a later phase
+            isMinifyEnabled = false
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
