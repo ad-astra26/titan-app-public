@@ -1,7 +1,10 @@
 package tech.iamtitan.app.ui
 
+import android.content.Intent
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,8 +13,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -19,15 +25,24 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import tech.iamtitan.app.chat.ChatTurn
@@ -65,7 +80,10 @@ fun ChatScreen(
 private fun ChatHeader(titanLabel: String, resting: Boolean, onOpenSettings: () -> Unit) {
     Surface(color = TitanSurface, shadowElevation = 2.dp) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            // statusBarsPadding: the colored header bleeds under the status bar, content
+            // sits below it (so ⚙ / the title no longer collide with the clock/notch).
+            modifier = Modifier.fillMaxWidth().statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TitanOrb(size = 34)
@@ -91,27 +109,59 @@ private fun ChatHeader(titanLabel: String, resting: Boolean, onOpenSettings: () 
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Bubble(turn: ChatTurn) {
     val mine = turn.fromMaker
+    var menuOpen by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
     ) {
-        Box(
-            modifier = Modifier
-                .widthIn(max = 300.dp)
-                .clip(
-                    RoundedCornerShape(
-                        topStart = 18.dp, topEnd = 18.dp,
-                        bottomStart = if (mine) 18.dp else 4.dp,
-                        bottomEnd = if (mine) 4.dp else 18.dp,
-                    ),
+        Box {
+            Box(
+                modifier = Modifier
+                    .widthIn(max = 300.dp)
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = 18.dp, topEnd = 18.dp,
+                            bottomStart = if (mine) 18.dp else 4.dp,
+                            bottomEnd = if (mine) 4.dp else 18.dp,
+                        ),
+                    )
+                    .background(if (mine) TitanCyan else TitanSurfaceHi)
+                    // Long-press a bubble → Copy / Share (the requested text actions).
+                    .combinedClickable(onClick = {}, onLongClick = { menuOpen = true })
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            ) {
+                Text(turn.text, color = if (mine) TitanInk else TitanText)
+            }
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(
+                    text = { Text("Copy") },
+                    onClick = {
+                        clipboard.setText(AnnotatedString(turn.text))
+                        menuOpen = false
+                    },
                 )
-                .background(if (mine) TitanCyan else TitanSurfaceHi)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-        ) {
-            Text(turn.text, color = if (mine) TitanInk else TitanText)
+                DropdownMenuItem(
+                    text = { Text("Share") },
+                    onClick = {
+                        menuOpen = false
+                        context.startActivity(
+                            Intent.createChooser(
+                                Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_TEXT, turn.text)
+                                },
+                                null,
+                            ),
+                        )
+                    },
+                )
+            }
         }
     }
 }
@@ -139,7 +189,9 @@ private fun Composer(
 ) {
     Surface(color = TitanSurface) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            // navigationBars + ime padding: the composer rides above the gesture/nav bar
+            // and lifts above the keyboard instead of being drawn under them.
+            modifier = Modifier.fillMaxWidth().navigationBarsPadding().imePadding().padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OutlinedTextField(

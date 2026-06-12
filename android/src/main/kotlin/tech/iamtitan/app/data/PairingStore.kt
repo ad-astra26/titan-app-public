@@ -61,6 +61,15 @@ class PairingStore(context: Context) {
         get() = prefs.getBoolean("sealed_seed_windowed", false)
         set(v) = prefs.edit().putBoolean("sealed_seed_windowed", v).apply()
 
+    /**
+     * The last event-queue cursor this device has consumed + acked (RFP event-channel).
+     * Shared by the foreground long-poll loop and the background WorkManager drain so
+     * delivery is exactly-once across both paths.
+     */
+    var eventCursor: Int
+        get() = prefs.getInt("event_cursor", 0)
+        set(v) = prefs.edit().putInt("event_cursor", v).apply()
+
     /** True if a sealed identity exists (started pairing at least once). */
     fun hasIdentity(): Boolean = deviceId != null && sealedSeedB64 != null
 

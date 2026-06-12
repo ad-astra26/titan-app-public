@@ -8,14 +8,17 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.drawable.Icon
 import android.os.Build
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import tech.iamtitan.app.MainActivity
 
 /**
- * Native AOSP notifications (NotificationManager — no GMS, AD-7). Two channels:
- *  - [CHANNEL_CHAT] — "Titan replied" while the app is backgrounded.
+ * Native AOSP notifications (NotificationManager — no GMS, AD-7). Three channels:
+ *  - [CHANNEL_CHAT] — "Titan replied" / Titan-initiated messages while backgrounded.
+ *  - [CHANNEL_HEALTH] — "Titan is down / recovered" (RFP event-channel health events),
+ *    with a Restart action that opens the app to perform the signed restart.
  *  - [CHANNEL_LINK] — the low-importance ongoing notice for `TitanReplyService`
  *    (a foreground service must show one).
  *
@@ -31,6 +34,11 @@ class Notifier(private val context: Context) {
         mgr.createNotificationChannel(
             NotificationChannel(CHANNEL_CHAT, "Titan messages", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Replies and messages from Titan"
+            },
+        )
+        mgr.createNotificationChannel(
+            NotificationChannel(CHANNEL_HEALTH, "Titan status", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "When Titan goes down or recovers"
             },
         )
         mgr.createNotificationChannel(
@@ -62,6 +70,29 @@ class Notifier(private val context: Context) {
         NotificationManagerCompat.from(context).notify(REPLY_NOTIF_ID, n)
     }
 
+    /** Post a Titan health notification (RFP event-channel §1.3 step 5). A "down" event
+     *  carries a Restart action that opens the app to run the signed `/console/restart`. */
+    fun notifyHealth(up: Boolean, text: String) {
+        if (!canPost()) return
+        ensureChannels()
+        val icon = if (up) android.R.drawable.stat_notify_sync else android.R.drawable.stat_sys_warning
+        val builder = baseBuilder(CHANNEL_HEALTH, icon)
+            .setContentTitle(if (up) "Titan recovered" else "Titan is down")
+            .setContentText(text.take(240))
+            .setStyle(Notification.BigTextStyle().bigText(text.take(1000)))
+            .setAutoCancel(true)
+        if (!up) {
+            builder.addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(context, android.R.drawable.ic_menu_rotate),
+                    "Restart",
+                    restartIntent(),
+                ).build(),
+            )
+        }
+        NotificationManagerCompat.from(context).notify(HEALTH_NOTIF_ID, builder.build())
+    }
+
     private fun baseBuilder(channelId: String, smallIcon: Int): Notification.Builder {
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(context, channelId)
@@ -80,6 +111,17 @@ class Notifier(private val context: Context) {
         )
     }
 
+    /** Opens the app carrying the restart request — the Activity has a signing window
+     *  (and can prompt if it lapsed), so the kernel restart runs with UI feedback. */
+    private fun restartIntent(): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra(EXTRA_ACTION, ACTION_RESTART)
+        return PendingIntent.getActivity(
+            context, 1, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
     private fun canPost(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
@@ -87,8 +129,14 @@ class Notifier(private val context: Context) {
 
     companion object {
         const val CHANNEL_CHAT = "titan.chat"
+        const val CHANNEL_HEALTH = "titan.health"
         const val CHANNEL_LINK = "titan.link"
         const val REPLY_NOTIF_ID = 1001
         const val LINK_NOTIF_ID = 1002
+        const val HEALTH_NOTIF_ID = 1003
+
+        /** Intent extra the health-notification Restart action sets on MainActivity. */
+        const val EXTRA_ACTION = "titan.action"
+        const val ACTION_RESTART = "restart_titan"
     }
 }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -41,7 +42,7 @@ fun SettingsScreen(
     onTimerChange: (Int) -> Unit,
     onClose: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize().background(TitanInk)) {
+    Column(modifier = Modifier.fillMaxSize().background(TitanInk).systemBarsPadding()) {
         SettingsHeader(onClose)
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("App lock", color = TitanText, fontWeight = FontWeight.SemiBold,

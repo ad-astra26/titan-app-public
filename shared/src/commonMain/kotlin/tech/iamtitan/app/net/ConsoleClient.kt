@@ -84,12 +84,52 @@ class ConsoleClient(
         }
     }
 
-    /** Attach the AG4 signature headers and send. [body] null ⇒ no-body (GET). */
+    /**
+     * Drain this device's outbound event queue (RFP event-channel §1.2) — a signed
+     * long-poll. [wait] holds the connection server-side (0 = instant drain, what the
+     * WorkManager job uses); [since] is the last cursor the phone consumed. A non-200
+     * (401 / Titan-down) yields an empty response so the caller simply retries.
+     */
+    suspend fun events(signer: RequestSigner, wait: Int, since: Int): EventsResponse {
+        val resp = signedRequest(signer, "GET", "/console/events", null, "wait=$wait&since=$since")
+        if (resp.status != 200) return EventsResponse(cursor = since)
+        return runCatching {
+            WireJson.decodeFromString(EventsResponse.serializer(), resp.bodyText())
+        }.getOrElse { EventsResponse(cursor = since) }
+    }
+
+    /**
+     * Report presence + ack consumed events (RFP event-channel §1.2). [ackCursor]
+     * prunes everything delivered up to it. Best-effort: returns true on 200.
+     */
+    suspend fun heartbeat(
+        signer: RequestSigner,
+        state: String,
+        ackCursor: Int?,
+        battery: Int? = null,
+    ): Boolean {
+        val body = WireJson.encodeToString(
+            HeartbeatBody.serializer(), HeartbeatBody(state, ackCursor, battery),
+        ).encodeToByteArray()
+        return signedRequest(signer, "POST", "/console/app/heartbeat", body).status == 200
+    }
+
+    /** Restart the kernel from the phone (the health notification's action). 200 = ok. */
+    suspend fun restart(signer: RequestSigner): Boolean =
+        signedRequest(signer, "POST", "/console/restart", "{}".encodeToByteArray()).status == 200
+
+    /**
+     * Attach the AG4 signature headers and send. [body] null ⇒ no-body (GET). [query]
+     * rides in the URL but is **excluded from the signature** — the canonical string
+     * signs `method\npath\nts\nsha256hex(body)` (the server verifies the bare path; the
+     * cursor is server-authoritative). This mirrors `verify_request_signature`.
+     */
     private suspend fun signedRequest(
         signer: RequestSigner,
         method: String,
         path: String,
         body: ByteArray?,
+        query: String? = null,
     ): HttpResponse {
         val ts = nowEpochSeconds().toString()
         val bodyBytes = body ?: ByteArray(0)
@@ -101,6 +141,7 @@ class ConsoleClient(
             put("X-Signature", Base64.encode(signature))
             if (body != null) put("Content-Type", "application/json")
         }
-        return transport.send(HttpRequest(method, "$base$path", headers, body))
+        val url = if (query.isNullOrEmpty()) "$base$path" else "$base$path?$query"
+        return transport.send(HttpRequest(method, url, headers, body))
     }
 }

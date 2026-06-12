@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import com.google.zxing.integration.android.IntentIntegrator
+import tech.iamtitan.app.notify.Notifier
 import tech.iamtitan.app.ui.ChatScreen
 import tech.iamtitan.app.ui.LockScreen
 import tech.iamtitan.app.ui.PairingScreen
@@ -45,6 +47,9 @@ class MainActivity : FragmentActivity() {
     private lateinit var controller: TitanController
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Edge-to-edge is enforced on targetSdk 35; declare it explicitly so the bars are
+        // transparent with correct icon contrast. Each screen consumes its own insets.
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         // Process-lifetime scope (not lifecycleScope) so an in-flight chat reply
         // survives backgrounding (see TitanApp.appScope + TitanReplyService).
@@ -57,9 +62,23 @@ class MainActivity : FragmentActivity() {
             }
         }
         maybeRequestNotificationPermission()
+        handleActionIntent(intent)
         // DEBUG-only: inject a pairing payload over adb for headless emulator testing.
         if (BuildConfig.DEBUG) {
             intent?.getStringExtra("pair_payload")?.let(controller::onScanned)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleActionIntent(intent)
+    }
+
+    /** The health notification's "Restart" action opens us with this extra → restart. */
+    private fun handleActionIntent(intent: Intent?) {
+        if (intent?.getStringExtra(Notifier.EXTRA_ACTION) == Notifier.ACTION_RESTART) {
+            controller.onRestartRequested()
         }
     }
 

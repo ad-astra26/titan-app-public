@@ -81,4 +81,6 @@ dependencies {
     implementation(libs.androidx.biometric)
     implementation(libs.zxing.android.embedded)
     implementation(libs.kotlinx.coroutines.android)
+    // Event channel (RFP event-channel Phase 1): deep-background queue drain.
+    implementation(libs.androidx.work.runtime.ktx)
 }

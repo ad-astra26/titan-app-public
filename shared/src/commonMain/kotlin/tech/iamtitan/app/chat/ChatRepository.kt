@@ -8,11 +8,19 @@ import tech.iamtitan.app.net.RequestSigner
  * (the kernel thread id; ≥8 chars so the agent never has to pad it) and forwards
  * each turn through the signed `/console/chat` path. Transcript state is the UI's.
  */
+/**
+ * The stable per-device chat thread id (the kernel thread id; ≥8 chars). A top-level
+ * fn so the live repo and the background event worker derive the SAME session — a
+ * Titan-initiated message persists to the same transcript the chat screen reads.
+ */
+fun chatSessionFor(deviceId: String): String =
+    "console-$deviceId".take(64).padEnd(8, '0')
+
 class ChatRepository(
     private val client: ConsoleClient,
     private val signer: RequestSigner,
     /** Stable per-device thread so the owner conversation is continuous. */
-    val session: String = "console-${signer.deviceId}".take(64).padEnd(8, '0'),
+    val session: String = chatSessionFor(signer.deviceId),
 ) {
     suspend fun send(message: String): ChatResult {
         val trimmed = message.trim()

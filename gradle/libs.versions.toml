@@ -15,6 +15,9 @@ bouncycastle = "1.78.1"
 kotlinxSerialization = "1.7.3"
 # Coroutines — runBlocking in jvmTest for the suspend signing-path test. Apache-2.0.
 kotlinxCoroutines = "1.8.1"
+# WorkManager — the OS-blessed deep-background event-queue drain (~15-min floor;
+# RFP event-channel AG-EVT-5, battery-respectful, no GMS). Apache-2.0 FOSS.
+workManager = "2.9.1"
 
 [libraries]
 # --- Android UI (wired in Phase 0 Step B with the :android module) ---
@@ -33,6 +36,7 @@ bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "boun
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinxCoroutines" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
+androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "workManager" }
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
