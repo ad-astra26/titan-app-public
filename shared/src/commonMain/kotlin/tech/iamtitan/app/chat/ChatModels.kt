@@ -33,5 +33,28 @@ sealed interface ChatResult {
     data class Failed(val message: String) : ChatResult
 }
 
-/** A line in the conversation transcript (UI state). */
-data class ChatTurn(val fromMaker: Boolean, val text: String)
+/**
+ * Lifecycle of a transcript turn. COMPLETE for finished lines; PENDING/FAILED
+ * drive the background-reply machinery (a reply still being awaited survives
+ * backgrounding / process death as a PENDING line, then is replaced in place
+ * when it lands — see ChatStore + the foreground-reply service).
+ */
+@Serializable
+enum class TurnStatus { COMPLETE, PENDING, FAILED }
+
+/**
+ * A line in the conversation transcript. Held as Compose UI state AND persisted
+ * locally by `ChatStore` so history survives the process being killed. New
+ * fields default so older persisted transcripts decode cleanly (WireJson is
+ * lenient + encodes defaults).
+ */
+@Serializable
+data class ChatTurn(
+    val fromMaker: Boolean,
+    val text: String,
+    /** epoch millis when the line was created (0 = legacy/unknown). */
+    val ts: Long = 0L,
+    val status: TurnStatus = TurnStatus.COMPLETE,
+    /** stable id so a PENDING reply can be replaced in place once it arrives. */
+    val id: String = "",
+)

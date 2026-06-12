@@ -15,7 +15,9 @@ import tech.iamtitan.app.chat.ChatRepository
 import tech.iamtitan.app.chat.ChatResult
 import tech.iamtitan.app.chat.ChatTurn
 import tech.iamtitan.app.crypto.DeviceKey
+import tech.iamtitan.app.data.ChatStore
 import tech.iamtitan.app.data.PairingStore
+import java.util.UUID
 import tech.iamtitan.app.net.AndroidHttpTransport
 import tech.iamtitan.app.net.ConsoleClient
 import tech.iamtitan.app.pairing.SubmitRequest
@@ -39,6 +41,7 @@ class TitanController(
 ) {
     private val context = activity.applicationContext
     private val store = PairingStore(context)
+    private val chatStore = ChatStore(context)
     private val activityProvider = { activity }
 
     var screen by mutableStateOf(Screen.Pairing); private set
@@ -61,6 +64,9 @@ class TitanController(
         DeviceKey.existing(context, store, activityProvider)?.let { key ->
             if (store.paired) {
                 bindChat(key)
+                // Rehydrate the transcript so history survives a process kill (the
+                // "chat gone after hours" quirk). repo is set by bindChat above.
+                repo?.session?.let { turns.addAll(chatStore.load(it)) }
                 pairing = PairingUiState.Paired(store.label)
                 screen = Screen.Chat
             }
@@ -153,7 +159,7 @@ class TitanController(
         val repository = repo ?: return
         val text = draft.trim()
         if (text.isEmpty() || sending) return
-        turns.add(ChatTurn(fromMaker = true, text = text))
+        addTurn(ChatTurn(fromMaker = true, text = text, ts = nowMs(), id = newId()))
         draft = ""
         sending = true
         scope.launch {
@@ -164,16 +170,33 @@ class TitanController(
             }
             sending = false
             when (result) {
-                is ChatResult.Reply -> { resting = false; turns.add(ChatTurn(false, result.text)) }
-                is ChatResult.Declined -> { resting = false; turns.add(ChatTurn(false, result.reason)) }
+                is ChatResult.Reply -> { resting = false; addBotTurn(result.text) }
+                is ChatResult.Declined -> { resting = false; addBotTurn(result.reason) }
                 ChatResult.TitanResting -> {
                     resting = true
-                    turns.add(ChatTurn(false, "I’m resting right now. Wake me from the Console when you need me."))
+                    addBotTurn("I’m resting right now. Wake me from the Console when you need me.")
                 }
-                is ChatResult.Failed -> turns.add(ChatTurn(false, "⚠ ${result.message}"))
+                is ChatResult.Failed -> addBotTurn("⚠ ${result.message}")
             }
         }
     }
+
+    /** Append a turn and persist the transcript (survives a process kill). */
+    private fun addTurn(turn: ChatTurn) {
+        turns.add(turn)
+        persist()
+    }
+
+    private fun addBotTurn(text: String) =
+        addTurn(ChatTurn(fromMaker = false, text = text, ts = nowMs(), id = newId()))
+
+    private fun persist() {
+        repo?.session?.let { chatStore.save(it, turns.toList()) }
+    }
+
+    private fun nowMs(): Long = System.currentTimeMillis()
+
+    private fun newId(): String = UUID.randomUUID().toString()
 
     companion object {
         /** Emulator → host loopback. Real phones get the endpoint from the QR (Tailscale). */
