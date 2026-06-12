@@ -1,8 +1,13 @@
 package tech.iamtitan.app
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -17,7 +22,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
-import androidx.lifecycle.lifecycleScope
 import com.google.zxing.integration.android.IntentIntegrator
 import tech.iamtitan.app.ui.ChatScreen
 import tech.iamtitan.app.ui.PairingScreen
@@ -40,18 +44,43 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        controller = TitanController(this, lifecycleScope)
+        // Process-lifetime scope (not lifecycleScope) so an in-flight chat reply
+        // survives backgrounding (see TitanApp.appScope + TitanReplyService).
+        controller = TitanController(this, (application as TitanApp).appScope)
         setContent {
             TitanTheme {
                 Surface(modifier = Modifier.fillMaxSize(), color = TitanInk) {
-                    TitanApp(controller, onScan = ::launchScan)
+                    TitanRoot(controller, onScan = ::launchScan)
                 }
             }
         }
+        maybeRequestNotificationPermission()
         // DEBUG-only: inject a pairing payload over adb for headless emulator testing.
         if (BuildConfig.DEBUG) {
             intent?.getStringExtra("pair_payload")?.let(controller::onScanned)
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Backstop: show a reply the appScope request may have delivered while this
+        // Activity was stopped/recreated (e.g. a rotation mid-reply).
+        controller.onAppResume()
+    }
+
+    /** POST_NOTIFICATIONS is a runtime grant on API 33+. Classic API + a 16-bit
+     *  request code (the ActivityResult registry's >16-bit codes crash
+     *  FragmentActivity — same reason we use classic IntentIntegrator for the QR). */
+    private fun maybeRequestNotificationPermission() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        ActivityCompat.requestPermissions(
+            this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_POST_NOTIFICATIONS,
+        )
     }
 
     @Suppress("DEPRECATION")
@@ -75,10 +104,14 @@ class MainActivity : FragmentActivity() {
             super.onActivityResult(requestCode, resultCode, data)
         }
     }
+
+    private companion object {
+        const val REQ_POST_NOTIFICATIONS = 0x4E0F // 16-bit-safe request code
+    }
 }
 
 @Composable
-private fun TitanApp(controller: TitanController, onScan: () -> Unit) {
+private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
     var showPaste by remember { mutableStateOf(false) }
 
     when (controller.screen) {

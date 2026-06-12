@@ -7,7 +7,14 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
+    <!-- Keep the process un-frozen while a chat reply is in flight (TitanReplyService). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Native "Titan replied" notifications (runtime grant on API 33+). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
+        android:name=".TitanApp"
         android:allowBackup="false"
         android:label="Titan"
         android:supportsRtl="true"
@@ -23,6 +30,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Short FGS that keeps the in-flight chat reply alive across backgrounding. -->
+        <service
+            android:name=".service.TitanReplyService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 
 </manifest>

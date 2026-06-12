@@ -20,6 +20,8 @@ import tech.iamtitan.app.data.PairingStore
 import java.util.UUID
 import tech.iamtitan.app.net.AndroidHttpTransport
 import tech.iamtitan.app.net.ConsoleClient
+import tech.iamtitan.app.notify.Notifier
+import tech.iamtitan.app.service.TitanReplyService
 import tech.iamtitan.app.pairing.SubmitRequest
 import tech.iamtitan.app.pairing.code6
 import tech.iamtitan.app.pairing.parsePairingPayload
@@ -42,7 +44,11 @@ class TitanController(
     private val context = activity.applicationContext
     private val store = PairingStore(context)
     private val chatStore = ChatStore(context)
+    private val notifier = Notifier(context).apply { ensureChannels() }
     private val activityProvider = { activity }
+
+    /** True when any Activity is started — drives "notify vs update live UI". */
+    private fun appIsForeground(): Boolean = (context as? TitanApp)?.isForeground ?: true
 
     var screen by mutableStateOf(Screen.Pairing); private set
     var pairing by mutableStateOf<PairingUiState>(PairingUiState.NotPaired); private set
@@ -162,6 +168,11 @@ class TitanController(
         addTurn(ChatTurn(fromMaker = true, text = text, ts = nowMs(), id = newId()))
         draft = ""
         sending = true
+        // The request runs on the process-lifetime appScope (not the Activity's),
+        // and a short foreground service keeps the process un-frozen so a reply
+        // that lands after the Maker backgrounds the app is NOT dropped (the
+        // reported quirk). The biometric to sign happens here, while foregrounded.
+        TitanReplyService.start(context)
         scope.launch {
             val result = try {
                 withContext(Dispatchers.IO) { repository.send(text) }
@@ -169,14 +180,35 @@ class TitanController(
                 ChatResult.Failed(e.message ?: "Network error.")
             }
             sending = false
-            when (result) {
-                is ChatResult.Reply -> { resting = false; addBotTurn(result.text) }
-                is ChatResult.Declined -> { resting = false; addBotTurn(result.reason) }
+            val replyText = when (result) {
+                is ChatResult.Reply -> { resting = false; result.text }
+                is ChatResult.Declined -> { resting = false; result.reason }
                 ChatResult.TitanResting -> {
                     resting = true
-                    addBotTurn("I’m resting right now. Wake me from the Console when you need me.")
+                    "I’m resting right now. Wake me from the Console when you need me."
                 }
-                is ChatResult.Failed -> addBotTurn("⚠ ${result.message}")
+                is ChatResult.Failed -> "⚠ ${result.message}"
+            }
+            addBotTurn(replyText)
+            // Backgrounded when the reply landed ⇒ surface it as a native notification;
+            // it's already persisted, so opening the app shows it in the transcript too.
+            if (!appIsForeground()) notifier.notifyReply(replyText)
+            TitanReplyService.stop(context)
+        }
+    }
+
+    /**
+     * Re-sync the in-memory transcript from the persisted store on app resume —
+     * the backstop that shows a reply delivered by the appScope request after the
+     * Activity was recreated (e.g. a rotation mid-reply). Idempotent: clear+reload
+     * from the single source of truth (ChatStore).
+     */
+    fun onAppResume() {
+        repo?.session?.let { session ->
+            val persisted = chatStore.load(session)
+            if (persisted.size != turns.size) {
+                turns.clear()
+                turns.addAll(persisted)
             }
         }
     }
