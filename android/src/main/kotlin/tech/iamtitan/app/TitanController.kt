@@ -16,7 +16,9 @@ import tech.iamtitan.app.chat.ChatResult
 import tech.iamtitan.app.chat.ChatTurn
 import tech.iamtitan.app.crypto.DeviceKey
 import tech.iamtitan.app.data.ChatStore
+import tech.iamtitan.app.data.LockMode
 import tech.iamtitan.app.data.PairingStore
+import tech.iamtitan.app.data.SecuritySettings
 import java.util.UUID
 import tech.iamtitan.app.net.AndroidHttpTransport
 import tech.iamtitan.app.net.ConsoleClient
@@ -44,6 +46,7 @@ class TitanController(
     private val context = activity.applicationContext
     private val store = PairingStore(context)
     private val chatStore = ChatStore(context)
+    private val security = SecuritySettings(context)
     private val notifier = Notifier(context).apply { ensureChannels() }
     private val activityProvider = { activity }
 
@@ -57,6 +60,13 @@ class TitanController(
     var sending by mutableStateOf(false); private set
     var resting by mutableStateOf(false); private set
     val titanLabel = "Titan"
+
+    // ── App lock (Settings-driven UX gate; see SecuritySettings + DeviceKey window) ──
+    var locked by mutableStateOf(false); private set
+    var showSettings by mutableStateOf(false); private set
+    var lockMode by mutableStateOf(security.lockMode); private set
+    var lockTimerMinutes by mutableStateOf(security.lockTimerMinutes); private set
+    private var lastBackgroundAt = 0L
 
     private var signer: DeviceKey? = null
     private var repo: ChatRepository? = null
@@ -75,6 +85,8 @@ class TitanController(
                 repo?.session?.let { turns.addAll(chatStore.load(it)) }
                 pairing = PairingUiState.Paired(store.label)
                 screen = Screen.Chat
+                // Cold-start lock: every mode except OFF requires an unlock to begin.
+                locked = lockMode != LockMode.OFF
             }
         }
     }
@@ -211,6 +223,48 @@ class TitanController(
                 turns.addAll(persisted)
             }
         }
+        evaluateLockOnForeground()
+    }
+
+    /** Activity stopped — note when, for the TIMER lock policy. */
+    fun onBackground() {
+        if (store.paired) lastBackgroundAt = System.currentTimeMillis()
+    }
+
+    /** Re-lock on return-from-background per the policy. Cold start is handled in
+     *  init (lastBackgroundAt==0 ⇒ skip; the initial lock is already set). */
+    private fun evaluateLockOnForeground() {
+        if (!store.paired || lastBackgroundAt == 0L) return
+        when (lockMode) {
+            LockMode.OFF, LockMode.ON_LAUNCH -> Unit
+            LockMode.IMMEDIATE -> locked = true
+            LockMode.TIMER ->
+                if (System.currentTimeMillis() - lastBackgroundAt >= lockTimerMinutes * 60_000L) {
+                    locked = true
+                }
+        }
+    }
+
+    /** Dismiss the lock overlay via one biometric/credential auth (which also opens
+     *  the time-bound signing window, so the next chat turn doesn't re-prompt). */
+    fun unlock() {
+        val key = signer ?: run { locked = false; return }
+        scope.launch {
+            if (key.unlock()) locked = false
+        }
+    }
+
+    fun openSettings() { showSettings = true }
+    fun closeSettings() { showSettings = false }
+
+    fun updateLockMode(mode: LockMode) {
+        lockMode = mode
+        security.lockMode = mode
+    }
+
+    fun updateLockTimerMinutes(minutes: Int) {
+        lockTimerMinutes = minutes
+        security.lockTimerMinutes = minutes
     }
 
     /** Append a turn and persist the transcript (survives a process kill). */

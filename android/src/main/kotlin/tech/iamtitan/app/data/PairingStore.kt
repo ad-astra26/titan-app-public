@@ -51,6 +51,16 @@ class PairingStore(context: Context) {
         get() = prefs.getString("sealed_seed_iv", null)
         set(v) = prefs.edit().putString("sealed_seed_iv", v).apply()
 
+    /**
+     * True once the seed is sealed under the **time-bound** wrapping key (alias v2),
+     * so one unlock authorizes signing for a window (no per-message biometric).
+     * Defaults false = legacy per-op key (alias v1); flipped true on a successful
+     * migration or for new pairings. See [tech.iamtitan.app.crypto.DeviceKey].
+     */
+    var sealedSeedWindowed: Boolean
+        get() = prefs.getBoolean("sealed_seed_windowed", false)
+        set(v) = prefs.edit().putBoolean("sealed_seed_windowed", v).apply()
+
     /** True if a sealed identity exists (started pairing at least once). */
     fun hasIdentity(): Boolean = deviceId != null && sealedSeedB64 != null
 

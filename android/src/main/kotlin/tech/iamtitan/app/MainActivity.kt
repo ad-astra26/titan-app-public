@@ -24,7 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import com.google.zxing.integration.android.IntentIntegrator
 import tech.iamtitan.app.ui.ChatScreen
+import tech.iamtitan.app.ui.LockScreen
 import tech.iamtitan.app.ui.PairingScreen
+import tech.iamtitan.app.ui.SettingsScreen
 import tech.iamtitan.app.ui.TitanInk
 import tech.iamtitan.app.ui.TitanTheme
 
@@ -64,8 +66,13 @@ class MainActivity : FragmentActivity() {
     override fun onStart() {
         super.onStart()
         // Backstop: show a reply the appScope request may have delivered while this
-        // Activity was stopped/recreated (e.g. a rotation mid-reply).
+        // Activity was stopped/recreated; also re-evaluates the app-lock policy.
         controller.onAppResume()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        controller.onBackground() // timestamp for the TIMER lock policy
     }
 
     /** POST_NOTIFICATIONS is a runtime grant on API 33+. Classic API + a 16-bit
@@ -130,6 +137,7 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
             resting = controller.resting,
             onDraftChange = controller::onDraftChange,
             onSend = controller::onSend,
+            onOpenSettings = controller::openSettings,
         )
     }
 
@@ -138,6 +146,20 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
             onDismiss = { showPaste = false },
             onSubmit = { payload -> showPaste = false; controller.onScanned(payload) },
         )
+    }
+
+    // Settings sits over the base screen; the lock overlay sits over everything.
+    if (controller.showSettings) {
+        SettingsScreen(
+            lockMode = controller.lockMode,
+            lockTimerMinutes = controller.lockTimerMinutes,
+            onLockModeChange = controller::updateLockMode,
+            onTimerChange = controller::updateLockTimerMinutes,
+            onClose = controller::closeSettings,
+        )
+    }
+    if (controller.locked) {
+        LockScreen(onUnlock = controller::unlock)
     }
 }
 

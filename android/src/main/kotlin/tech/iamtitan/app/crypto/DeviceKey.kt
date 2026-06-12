@@ -7,6 +7,7 @@ import android.provider.Settings
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.security.keystore.StrongBoxUnavailableException
+import android.security.keystore.UserNotAuthenticatedException
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
@@ -32,14 +33,24 @@ import kotlin.io.encoding.ExperimentalEncodingApi
 /**
  * AG3 — the device identity: a software Ed25519 keypair whose 32-byte seed is
  * **sealed at rest** by an AndroidKeyStore AES-GCM key requiring user auth, and
- * unwrapped only transiently — behind a BiometricPrompt — to sign. The seed never
- * persists in the clear and never leaves the device. AndroidKeyStore can't hold an
- * Ed25519 key portably (<API 33), so the *wrapping* key is hardware-backed while the
- * Ed25519 math (BouncyCastle) runs over the transient seed.
+ * unwrapped only transiently to sign. The seed never persists in the clear and
+ * never leaves the device. AndroidKeyStore can't hold an Ed25519 key portably
+ * (<API 33), so the *wrapping* key is hardware-backed while the Ed25519 math
+ * (BouncyCastle) runs over the transient seed.
  *
- * The live keystore/biometric path runs on a real paired device (gate G1a/c, which
- * is Tailscale-blocked this session); a DEBUG-only insecure fallback lets the app
- * run on an emulator with no enrolled credential.
+ * ## Auth window (kills the per-message biometric)
+ * The wrapping key is **time-bound**: one successful unlock authorizes signing for
+ * [WINDOW_SECONDS], so chat turns within a session don't each re-prompt. The
+ * app-lock overlay (Settings) enforces the actual re-lock UX (off / immediate /
+ * timer / once-per-launch); the Keystore window is only "don't prompt mid-session".
+ *
+ * ## Safe migration (never bricks pairing)
+ * The original key (alias [KEY_ALIAS], per-op) is left **untouched**; the time-bound
+ * key uses a **new alias** ([KEY_ALIAS_V2]). A device paired before this change keeps
+ * signing through the unchanged legacy path and is migrated *opportunistically* on a
+ * successful sign — but only by re-sealing under v2 and flipping [PairingStore.sealedSeedWindowed]
+ * **after** that fully succeeds. Any failure leaves the legacy key + sealed seed intact
+ * (the device simply keeps prompting per signature, exactly as before).
  */
 @OptIn(ExperimentalEncodingApi::class)
 class DeviceKey private constructor(
@@ -59,6 +70,20 @@ class DeviceKey private constructor(
         }
     }
 
+    /**
+     * App-lock unlock entry point: a single biometric/credential auth that opens the
+     * time-bound signing window (so chat turns then sign without re-prompting). Returns
+     * true on success. For a not-yet-migrated device it still verifies the user; the
+     * first subsequent sign performs the migration.
+     */
+    suspend fun unlock(): Boolean =
+        try {
+            authenticateForWindow("Unlock Titan")
+            true
+        } catch (_: Exception) {
+            false
+        }
+
     private suspend fun unsealSeed(): ByteArray {
         val ivB64 = store.sealedSeedIvB64
         val ctB64 = store.sealedSeedB64
@@ -71,14 +96,72 @@ class DeviceKey private constructor(
             return ciphertext.copyOf()
         }
         val iv = Base64.decode(ivB64)
+
+        if (store.sealedSeedWindowed) {
+            return unsealWindowed(ciphertext, iv)
+        }
+        // ── Legacy per-op path (unchanged): one biometric per signature ──
         val cipher = Cipher.getInstance(TRANSFORM).apply {
             init(Cipher.DECRYPT_MODE, wrapKey(context), GCMParameterSpec(128, iv))
         }
         val authed = authenticate(cipher, "Unlock to sign for Titan")
-        return authed.doFinal(ciphertext)
+        val seed = authed.doFinal(ciphertext)
+        // Opportunistic, safe-degrading upgrade to the time-bound key (no-op on failure).
+        tryMigrateToWindowed(seed)
+        return seed
     }
 
-    /** Run BiometricPrompt over [cipher] and return the authenticated cipher. */
+    /** Decrypt the seed with the time-bound v2 key; if the window lapsed, prompt once
+     *  (no CryptoObject) to reopen it, then retry. */
+    private suspend fun unsealWindowed(ciphertext: ByteArray, iv: ByteArray): ByteArray {
+        fun decrypt(): ByteArray =
+            Cipher.getInstance(TRANSFORM).apply {
+                init(Cipher.DECRYPT_MODE, wrapKeyWindowed(context), GCMParameterSpec(128, iv))
+            }.doFinal(ciphertext)
+        return try {
+            decrypt()
+        } catch (_: UserNotAuthenticatedException) {
+            authenticateForWindow("Unlock to sign for Titan")
+            decrypt()
+        }
+    }
+
+    /** Re-seal the (already-unsealed) seed under the time-bound v2 key. SAFE-DEGRADE:
+     *  the store is rewritten only on full success; any failure leaves the legacy v1
+     *  key + sealed seed intact. Never bricks. */
+    private suspend fun tryMigrateToWindowed(seed: ByteArray) {
+        if (store.sealedSeedWindowed) return
+        try {
+            val (ct, ivOut) = encryptWithWindow(wrapKeyWindowed(context), seed, "Enable staying unlocked")
+            store.sealedSeedB64 = Base64.encode(ct)
+            store.sealedSeedIvB64 = Base64.encode(ivOut)
+            store.sealedSeedWindowed = true
+        } catch (_: Exception) {
+            // keep the legacy per-op path; the device just keeps prompting per signature.
+        }
+    }
+
+    /** Encrypt under a time-bound key: on a lapsed window prompt once, then retry.
+     *  Returns (ciphertext, iv). */
+    private suspend fun encryptWithWindow(
+        key: SecretKey,
+        plaintext: ByteArray,
+        subtitle: String,
+    ): Pair<ByteArray, ByteArray> {
+        fun enc(): Pair<ByteArray, ByteArray> {
+            val c = Cipher.getInstance(TRANSFORM).apply { init(Cipher.ENCRYPT_MODE, key) }
+            return c.doFinal(plaintext) to c.iv
+        }
+        return try {
+            enc()
+        } catch (_: UserNotAuthenticatedException) {
+            authenticateForWindow(subtitle)
+            enc()
+        }
+    }
+
+    /** Run BiometricPrompt over [cipher] and return the authenticated cipher (per-op,
+     *  legacy path — CryptoObject-bound). */
     private suspend fun authenticate(cipher: Cipher, subtitle: String): Cipher =
         withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { cont ->
@@ -106,9 +189,41 @@ class DeviceKey private constructor(
             }
         }
 
+    /** Authenticate WITHOUT a CryptoObject — opens the time-bound key's auth window. */
+    private suspend fun authenticateForWindow(subtitle: String): Unit =
+        withContext(Dispatchers.Main) {
+            suspendCancellableCoroutine { cont ->
+                val activity = activityProvider()
+                val prompt = BiometricPrompt(
+                    activity,
+                    ContextCompat.getMainExecutor(context),
+                    object : BiometricPrompt.AuthenticationCallback() {
+                        override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                            cont.resume(Unit)
+                        }
+
+                        override fun onAuthenticationError(code: Int, msg: CharSequence) {
+                            cont.resumeWithException(SecurityException("auth failed: $msg"))
+                        }
+                    },
+                )
+                val builder = BiometricPrompt.PromptInfo.Builder()
+                    .setTitle("Titan")
+                    .setSubtitle(subtitle)
+                    .setAllowedAuthenticators(authenticators())
+                if (Build.VERSION.SDK_INT < 30) builder.setNegativeButtonText("Cancel")
+                prompt.authenticate(builder.build())
+            }
+        }
+
     companion object {
-        private const val KEY_ALIAS = "titan.device.seed.wrap.v1"
+        private const val KEY_ALIAS = "titan.device.seed.wrap.v1"        // legacy, per-op
+        private const val KEY_ALIAS_V2 = "titan.device.seed.wrap.v2"     // time-bound window
         private const val TRANSFORM = "AES/GCM/NoPadding"
+
+        /** One unlock authorizes signing for this long (8 h). The app-lock overlay
+         *  governs the actual re-lock UX; this just avoids a prompt every chat turn. */
+        private const val WINDOW_SECONDS = 8 * 60 * 60
 
         private fun authenticators(): Int =
             if (Build.VERSION.SDK_INT >= 30) {
@@ -135,9 +250,9 @@ class DeviceKey private constructor(
         }
 
         /**
-         * Mint a fresh identity: random seed → Ed25519 pubkey → sealed at rest.
-         * Suspends to authenticate the seal (the key requires user auth). Returns the
-         * signer; the caller persists nothing else (this writes the store).
+         * Mint a fresh identity: random seed → Ed25519 pubkey → sealed at rest under the
+         * time-bound key. Suspends to authenticate the seal. Returns the signer; the
+         * caller persists nothing else (this writes the store).
          */
         suspend fun create(
             context: Context,
@@ -174,23 +289,37 @@ class DeviceKey private constructor(
                 // null IV; never reachable in release (canSecure() must be true there).
                 store.sealedSeedB64 = Base64.encode(seed)
                 store.sealedSeedIvB64 = null
+                store.sealedSeedWindowed = false
                 return
             }
-            val cipher = Cipher.getInstance(TRANSFORM).apply { init(Cipher.ENCRYPT_MODE, wrapKey(context)) }
+            // New pairings seal under the time-bound v2 key (no per-message prompt).
             val tmp = DeviceKey(context, store, activityProvider, "", ByteArray(0))
-            val authed = tmp.authenticate(cipher, "Secure your Titan device key")
-            store.sealedSeedB64 = Base64.encode(authed.doFinal(seed))
-            store.sealedSeedIvB64 = Base64.encode(authed.iv)
+            val (ct, iv) = tmp.encryptWithWindow(
+                wrapKeyWindowed(context), seed, "Secure your Titan device key",
+            )
+            store.sealedSeedB64 = Base64.encode(ct)
+            store.sealedSeedIvB64 = Base64.encode(iv)
+            store.sealedSeedWindowed = true
         }
 
-        /** The hardware-backed AES-GCM wrapping key; created once, user-auth required. */
-        private fun wrapKey(context: Context): SecretKey {
+        /** Legacy per-op wrapping key (alias v1) — read-only path for already-paired
+         *  devices; never generated for new pairings now (those use [wrapKeyWindowed]). */
+        private fun wrapKey(context: Context): SecretKey =
+            buildWrapKey(context, KEY_ALIAS, windowSeconds = 0)
+
+        /** Time-bound wrapping key (alias v2) — one auth authorizes [WINDOW_SECONDS]. */
+        private fun wrapKeyWindowed(context: Context): SecretKey =
+            buildWrapKey(context, KEY_ALIAS_V2, windowSeconds = WINDOW_SECONDS)
+
+        /** The hardware-backed AES-GCM wrapping key; created once. [windowSeconds] 0 =
+         *  per-op (CryptoObject) on API 30+; >0 = time-bound auth-validity window. */
+        private fun buildWrapKey(context: Context, alias: String, windowSeconds: Int): SecretKey {
             val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-            (ks.getKey(KEY_ALIAS, null) as? SecretKey)?.let { return it }
+            (ks.getKey(alias, null) as? SecretKey)?.let { return it }
 
             val kg = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
             val spec = KeyGenParameterSpec.Builder(
-                KEY_ALIAS,
+                alias,
                 KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
             )
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
@@ -199,14 +328,16 @@ class DeviceKey private constructor(
                 .setUserAuthenticationRequired(true)
                 .apply {
                     if (Build.VERSION.SDK_INT >= 30) {
-                        // 0s timeout = re-auth on every operation, bound to the CryptoObject.
+                        // windowSeconds=0 ⇒ per-op (CryptoObject); >0 ⇒ time-bound window.
                         setUserAuthenticationParameters(
-                            0,
+                            windowSeconds,
                             KeyProperties.AUTH_BIOMETRIC_STRONG or KeyProperties.AUTH_DEVICE_CREDENTIAL,
                         )
                     } else {
                         @Suppress("DEPRECATION")
-                        setUserAuthenticationValidityDurationSeconds(15) // time-window auth on API 26–29
+                        setUserAuthenticationValidityDurationSeconds(
+                            if (windowSeconds > 0) windowSeconds else 15,
+                        )
                     }
                 }
 

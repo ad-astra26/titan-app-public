@@ -1,6 +1,7 @@
 package tech.iamtitan.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,10 +41,11 @@ fun ChatScreen(
     resting: Boolean,
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize().background(TitanInk)) {
-        ChatHeader(titanLabel, resting)
+        ChatHeader(titanLabel, resting, onOpenSettings)
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -60,7 +62,7 @@ fun ChatScreen(
 }
 
 @Composable
-private fun ChatHeader(titanLabel: String, resting: Boolean) {
+private fun ChatHeader(titanLabel: String, resting: Boolean, onOpenSettings: () -> Unit) {
     Surface(color = TitanSurface, shadowElevation = 2.dp) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -68,7 +70,7 @@ private fun ChatHeader(titanLabel: String, resting: Boolean) {
         ) {
             TitanOrb(size = 34)
             Spacer(Modifier.size(12.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(titanLabel, color = TitanText, fontWeight = FontWeight.SemiBold)
                 Text(
                     if (resting) "resting — tap restart in Console" else "online · sovereign on its server",
@@ -76,6 +78,15 @@ private fun ChatHeader(titanLabel: String, resting: Boolean) {
                     style = MaterialTheme.typography.labelSmall,
                 )
             }
+            Text(
+                "⚙",
+                color = TitanMuted,
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .clickable(onClick = onOpenSettings)
+                    .padding(8.dp),
+            )
         }
     }
 }
