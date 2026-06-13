@@ -77,6 +77,9 @@ class TitanController(
     // ── "Stay connected" opt-in (RFP §7.2b — persistent always-on link) ──
     var alwaysConnected by mutableStateOf(connectionSettings.alwaysConnected); private set
 
+    // ── Declared availability (RFP §7.3 3b — a hint Titan reasons about, not a mute) ──
+    var availabilityState by mutableStateOf(connectionSettings.availability); private set
+
     private var signer: DeviceKey? = null
     private var repo: ChatRepository? = null
     private var pendingCode6: String? = null
@@ -292,6 +295,43 @@ class TitanController(
                 else "⚠ Couldn't reach the Console to restart.",
             )
         }
+    }
+
+    /** A Channel-2 action button completed via the app (RFP §7.3 — a `needs_app` action, or
+     *  a headless tap whose key-window had lapsed). Signs + posts the response; the inbox is
+     *  durable so this is best-effort. */
+    fun onRespondRequested(seq: Int, actionId: String) {
+        val key = signer ?: return
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    client().respond(key, inReplyTo = if (seq >= 0) seq else null,
+                                     kind = "action", actionId = actionId)
+                }
+            } catch (_: Exception) { /* durable inbox + best-effort */ }
+        }
+    }
+
+    /** Send a feedback chip on a Titan turn (RFP §7.3 3b). [seq] is parsed from the turn id
+     *  ("evt-<seq>"); a turn with no seq still posts (in_reply_to=null). */
+    fun onFeedback(seq: Int?, reaction: String? = null, stars: Int? = null) {
+        val key = signer ?: return
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    client().respond(key, inReplyTo = seq, kind = "feedback",
+                                     reaction = reaction, stars = stars)
+                }
+            } catch (_: Exception) { /* durable inbox + best-effort */ }
+        }
+    }
+
+    /** The Maker's declared availability (RFP §7.3 3b). Persisted; ridden on the next
+     *  heartbeat by [ConnectionManager]. Triggers an immediate heartbeat so it lands now. */
+    fun setAvailability(value: String) {
+        connectionSettings.availability = value
+        availabilityState = value
+        connection.nudgeHeartbeat()
     }
 
     private fun addBotTurnFromEvent(seq: Int, text: String) {

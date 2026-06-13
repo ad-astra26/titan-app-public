@@ -15,6 +15,7 @@ import tech.iamtitan.app.TitanApp
 import tech.iamtitan.app.TitanController
 import tech.iamtitan.app.chat.chatSessionFor
 import tech.iamtitan.app.crypto.DeviceKey
+import tech.iamtitan.app.data.ConnectionSettings
 import tech.iamtitan.app.data.PairingStore
 import tech.iamtitan.app.net.AndroidHttpTransport
 import tech.iamtitan.app.net.ConsoleClient
@@ -175,11 +176,22 @@ class ConnectionManager(
         }
     }
 
+    /** Fire one immediate heartbeat (best-effort) so a just-changed availability (RFP §7.3
+     *  3b) lands now instead of on the next loop cycle. No-op if no signer is bound yet. */
+    fun nudgeHeartbeat() {
+        signerProvider?.let { provider ->
+            appScope.launch { provider()?.let { heartbeat(it) } }
+        }
+    }
+
     private suspend fun heartbeat(key: DeviceKey) {
         val state = if (foreground) "foreground" else "background"
+        // The Maker's declared availability rides every heartbeat (RFP §7.3 3b).
+        val availability = ConnectionSettings(context).availability
         try {
             withContext(Dispatchers.IO) {
-                client().heartbeat(key, state, store.eventCursor, batteryPct())
+                client().heartbeat(key, state, store.eventCursor, batteryPct(),
+                                   availability = availability)
             }
         } catch (_: Exception) { /* presence is best-effort */ }
     }

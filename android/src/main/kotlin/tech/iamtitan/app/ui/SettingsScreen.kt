@@ -43,9 +43,11 @@ fun SettingsScreen(
     lockMode: LockMode,
     lockTimerMinutes: Int,
     alwaysConnected: Boolean,
+    availability: String,
     onLockModeChange: (LockMode) -> Unit,
     onTimerChange: (Int) -> Unit,
     onAlwaysConnectedChange: (Boolean) -> Unit,
+    onAvailabilityChange: (String) -> Unit,
     onClose: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().background(TitanInk).systemBarsPadding()) {
@@ -65,6 +67,20 @@ fun SettingsScreen(
                 checked = alwaysConnected,
                 onChange = onAlwaysConnectedChange,
             )
+            Spacer(Modifier.height(8.dp))
+            Text("Availability", color = TitanText, fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleSmall)
+            Text(
+                "What you tell Titan about your time. He reasons about this — it's a hint to him, not a hard mute; he decides whether to reach out.",
+                color = TitanMuted, style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(4.dp))
+            AvailabilityOption("available", "Available", "Open to hear from Titan.",
+                availability, onAvailabilityChange)
+            AvailabilityOption("busy", "Busy", "He'll tend to hold non-urgent messages.",
+                availability, onAvailabilityChange)
+            AvailabilityOption("dnd", "Do not disturb", "Only the most important, by his judgment.",
+                availability, onAvailabilityChange)
             Spacer(Modifier.height(8.dp))
             Text("App lock", color = TitanText, fontWeight = FontWeight.SemiBold,
                 style = MaterialTheme.typography.titleSmall)
@@ -135,6 +151,36 @@ private fun SettingsHeader(onClose: () -> Unit) {
                 onClick = onClose,
                 colors = ButtonDefaults.buttonColors(containerColor = TitanSurfaceHi, contentColor = TitanText),
             ) { Text("Done") }
+        }
+    }
+}
+
+@Composable
+private fun AvailabilityOption(
+    value: String,
+    title: String,
+    subtitle: String,
+    selected: String,
+    onSelect: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (value == selected) TitanSurfaceHi else TitanSurface)
+            .clickable { onSelect(value) }
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(
+            selected = value == selected,
+            onClick = { onSelect(value) },
+            colors = RadioButtonDefaults.colors(selectedColor = TitanCyan, unselectedColor = TitanMuted),
+        )
+        Spacer(Modifier.size(8.dp))
+        Column {
+            Text(title, color = TitanText, fontWeight = FontWeight.Medium)
+            Text(subtitle, color = TitanMuted, style = MaterialTheme.typography.bodySmall)
         }
     }
 }

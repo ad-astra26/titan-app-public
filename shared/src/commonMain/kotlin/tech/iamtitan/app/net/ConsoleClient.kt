@@ -107,9 +107,12 @@ class ConsoleClient(
         state: String,
         ackCursor: Int?,
         battery: Int? = null,
+        availability: String? = null,
+        availabilityUntil: Double? = null,
     ): Boolean {
         val body = WireJson.encodeToString(
-            HeartbeatBody.serializer(), HeartbeatBody(state, ackCursor, battery),
+            HeartbeatBody.serializer(),
+            HeartbeatBody(state, ackCursor, battery, availability, availabilityUntil),
         ).encodeToByteArray()
         return signedRequest(signer, "POST", "/console/app/heartbeat", body).status == 200
     }
@@ -117,6 +120,24 @@ class ConsoleClient(
     /** Restart the kernel from the phone (the health notification's action). 200 = ok. */
     suspend fun restart(signer: RequestSigner): Boolean =
         signedRequest(signer, "POST", "/console/restart", "{}".encodeToByteArray()).status == 200
+
+    /**
+     * Send a Channel-2 action tap or a feedback chip back to Titan (RFP §7.3) — a signed
+     * POST that lands durably in the Console Agent's inbox (the kernel consumes it). 200 = ok.
+     */
+    suspend fun respond(
+        signer: RequestSigner,
+        inReplyTo: Int?,
+        kind: String,
+        actionId: String? = null,
+        reaction: String? = null,
+        stars: Int? = null,
+    ): Boolean {
+        val body = WireJson.encodeToString(
+            RespondBody.serializer(), RespondBody(inReplyTo, kind, actionId, reaction, stars),
+        ).encodeToByteArray()
+        return signedRequest(signer, "POST", "/console/events/respond", body).status == 200
+    }
 
     /**
      * Attach the AG4 signature headers and send. [body] null ⇒ no-body (GET). [query]

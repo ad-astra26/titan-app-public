@@ -75,10 +75,19 @@ class MainActivity : FragmentActivity() {
         handleActionIntent(intent)
     }
 
-    /** The health notification's "Restart" action opens us with this extra → restart. */
+    /** A notification action opens us with an extra: the health "Restart", or a Channel-2
+     *  action (RFP §7.3 — a `needs_app` action, or a headless tap whose key window lapsed). */
     private fun handleActionIntent(intent: Intent?) {
-        if (intent?.getStringExtra(Notifier.EXTRA_ACTION) == Notifier.ACTION_RESTART) {
-            controller.onRestartRequested()
+        when (intent?.getStringExtra(Notifier.EXTRA_ACTION)) {
+            Notifier.ACTION_RESTART -> controller.onRestartRequested()
+            Notifier.ACTION_RESPOND -> {
+                val actionId = intent.getStringExtra(Notifier.EXTRA_ACTION_ID)
+                if (actionId != null) {
+                    controller.onRespondRequested(
+                        intent.getIntExtra(Notifier.EXTRA_SEQ, -1), actionId,
+                    )
+                }
+            }
         }
     }
 
@@ -157,6 +166,7 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
             onDraftChange = controller::onDraftChange,
             onSend = controller::onSend,
             onOpenSettings = controller::openSettings,
+            onFeedback = { seq, reaction -> controller.onFeedback(seq, reaction) },
         )
     }
 
@@ -173,9 +183,11 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
             lockMode = controller.lockMode,
             lockTimerMinutes = controller.lockTimerMinutes,
             alwaysConnected = controller.alwaysConnected,
+            availability = controller.availabilityState,
             onLockModeChange = controller::updateLockMode,
             onTimerChange = controller::updateLockTimerMinutes,
             onAlwaysConnectedChange = controller::updateAlwaysConnected,
+            onAvailabilityChange = controller::setAvailability,
             onClose = controller::closeSettings,
         )
     }

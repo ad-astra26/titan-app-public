@@ -55,6 +55,22 @@ object EventRenderer {
                     e.healthUp(),
                     e.healthText() ?: if (e.healthUp()) "Titan recovered." else "Titan is down.",
                 )
+                "system" -> {
+                    // Channel-2 actionable event (RFP §7.3 3a) — a first-person message with
+                    // buttons. Persisted to the transcript too so it's in history on open.
+                    val text = e.systemText() ?: continue
+                    val id = "evt-${e.seq}"
+                    if (turns.none { it.id == id }) {
+                        turns.add(
+                            ChatTurn(
+                                fromMaker = false, text = text,
+                                ts = (e.ts * 1000).toLong(), id = id,
+                            ),
+                        )
+                        changed = true
+                    }
+                    notifier.notifySystem(text, e.systemActions(), e.seq)
+                }
                 else -> Unit
             }
         }

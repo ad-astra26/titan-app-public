@@ -109,4 +109,52 @@ class EventsClientTest {
         assertTrue(sent.contains("\"ack_cursor\":43"))
         assertTrue(sent.contains("\"battery\":88"))
     }
+
+    // ── Phase 3 §7.3 ─────────────────────────────────────────────────────────
+    @Test
+    fun system_event_decodes_text_and_actions() = runBlocking {
+        val body = ("""{"events":[{"seq":7,"type":"system","payload":{"text":"Backup failed.",""" +
+            """"actions":[{"id":"retry","label":"Retry now","needs_app":false},""" +
+            """{"id":"details","label":"Tell me more","needs_app":true},""" +
+            """{"label":"malformed-no-id"}]}}],"cursor":7}""").encodeToByteArray()
+        val resp = ConsoleClient("http://x", FakeTransport(HttpResponse(200, body)))
+            .events(signer, wait = 0, since = 0)
+        val e = resp.events[0]
+        assertEquals("system", e.type)
+        assertEquals("Backup failed.", e.systemText())
+        val actions = e.systemActions()
+        assertEquals(2, actions.size) // the malformed (no id) entry is skipped, not a crash
+        assertEquals("retry", actions[0].id)
+        assertEquals("Retry now", actions[0].label)
+        assertFalse(actions[0].needsApp)
+        assertTrue(actions[1].needsApp) // "details" = high-stakes → opens the app
+    }
+
+    @Test
+    fun respond_signs_bare_path_and_carries_choice() = runBlocking {
+        val fake = FakeTransport(HttpResponse(200, """{"ok":true,"seq":1}""".encodeToByteArray()))
+        val ok = ConsoleClient("http://x", fake)
+            .respond(signer, inReplyTo = 42, kind = "action", actionId = "retry")
+        assertTrue(ok)
+        val req = assertNotNull(fake.last)
+        assertEquals("POST", req.method)
+        assertEquals("http://x/console/events/respond", req.url)
+        val ts = req.headers["X-Timestamp"]!!
+        val canonical = canonicalRequest("POST", "/console/events/respond", ts, sha256(req.body!!).toHex())
+        val sig = Base64.decode(req.headers["X-Signature"]!!)
+        assertTrue(Ed25519.verify(sig, canonical.encodeToByteArray(), signer.publicKey))
+        val sent = req.body!!.decodeToString()
+        assertTrue(sent.contains("\"in_reply_to\":42"))
+        assertTrue(sent.contains("\"kind\":\"action\""))
+        assertTrue(sent.contains("\"action_id\":\"retry\""))
+    }
+
+    @Test
+    fun heartbeat_carries_availability() = runBlocking {
+        val fake = FakeTransport(HttpResponse(200, """{"ok":true}""".encodeToByteArray()))
+        ConsoleClient("http://x", fake)
+            .heartbeat(signer, "foreground", 1, battery = 80, availability = "busy")
+        val sent = assertNotNull(fake.last).body!!.decodeToString()
+        assertTrue(sent.contains("\"availability\":\"busy\""))
+    }
 }

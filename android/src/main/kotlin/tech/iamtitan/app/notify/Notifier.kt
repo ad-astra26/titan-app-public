@@ -13,6 +13,8 @@ import android.os.Build
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import tech.iamtitan.app.MainActivity
+import tech.iamtitan.app.link.ResponseReceiver
+import tech.iamtitan.app.net.EventAction
 
 /**
  * Native AOSP notifications (NotificationManager — no GMS, AD-7). Three channels:
@@ -51,6 +53,11 @@ class Notifier(private val context: Context) {
             NotificationChannel(CHANNEL_URGENT, "Titan urgent", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Time-sensitive messages from Titan"
                 enableVibration(true)
+            },
+        )
+        mgr.createNotificationChannel(
+            NotificationChannel(CHANNEL_SYSTEM, "Titan asks", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Titan needs a decision (actionable messages)"
             },
         )
     }
@@ -115,6 +122,55 @@ class Notifier(private val context: Context) {
         NotificationManagerCompat.from(context).notify(HEALTH_NOTIF_ID, builder.build())
     }
 
+    /** A Channel-2 actionable system event (RFP §7.3 3a): a first-person message with one
+     *  button per [EventAction]. A `needsApp` action opens the app to complete (high-stakes,
+     *  like Restart); a low-stakes one fires [ResponseReceiver] headlessly. Tapping the body
+     *  opens the app. [seq] is the originating event seq carried back in the response. */
+    fun notifySystem(text: String, actions: List<EventAction>, seq: Int) {
+        if (!canPost()) return
+        ensureChannels()
+        val builder = baseBuilder(CHANNEL_SYSTEM, android.R.drawable.stat_notify_more)
+            .setContentTitle("Titan")
+            .setContentText(text.take(240))
+            .setStyle(Notification.BigTextStyle().bigText(text.take(1000)))
+            .setAutoCancel(true)
+        actions.forEachIndexed { i, a ->
+            builder.addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(context, android.R.drawable.ic_menu_send),
+                    a.label, respondIntent(seq, a, i),
+                ).build(),
+            )
+        }
+        NotificationManagerCompat.from(context).notify(SYSTEM_NOTIF_ID, builder.build())
+    }
+
+    /** A high-stakes action opens the app (which signs + sends with UI feedback); a
+     *  low-stakes one broadcasts to [ResponseReceiver] for a headless signed POST. */
+    private fun respondIntent(seq: Int, action: EventAction, idx: Int): PendingIntent {
+        val rc = seq * 100 + idx  // unique per (event, action)
+        return if (action.needsApp) {
+            val intent = Intent(context, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .putExtra(EXTRA_ACTION, ACTION_RESPOND)
+                .putExtra(EXTRA_SEQ, seq)
+                .putExtra(EXTRA_ACTION_ID, action.id)
+            PendingIntent.getActivity(
+                context, rc, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        } else {
+            val intent = Intent(context, ResponseReceiver::class.java)
+                .setAction(ACTION_RESPOND)
+                .putExtra(EXTRA_SEQ, seq)
+                .putExtra(EXTRA_ACTION_ID, action.id)
+            PendingIntent.getBroadcast(
+                context, rc, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+    }
+
     private fun baseBuilder(channelId: String, smallIcon: Int): Notification.Builder {
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(context, channelId)
@@ -154,13 +210,21 @@ class Notifier(private val context: Context) {
         const val CHANNEL_HEALTH = "titan.health"
         const val CHANNEL_LINK = "titan.link"
         const val CHANNEL_URGENT = "titan.urgent"
+        const val CHANNEL_SYSTEM = "titan.system"
         const val REPLY_NOTIF_ID = 1001
         const val LINK_NOTIF_ID = 1002
         const val HEALTH_NOTIF_ID = 1003
         const val URGENT_NOTIF_ID = 1004
+        const val SYSTEM_NOTIF_ID = 1005
 
         /** Intent extra the health-notification Restart action sets on MainActivity. */
         const val EXTRA_ACTION = "titan.action"
         const val ACTION_RESTART = "restart_titan"
+
+        /** A Channel-2 action tap (RFP §7.3 3a) → ResponseReceiver (headless) or MainActivity
+         *  (needs_app / lapsed-window fallback). Carries the originating event seq + action id. */
+        const val ACTION_RESPOND = "respond_action"
+        const val EXTRA_SEQ = "titan.seq"
+        const val EXTRA_ACTION_ID = "titan.action_id"
     }
 }

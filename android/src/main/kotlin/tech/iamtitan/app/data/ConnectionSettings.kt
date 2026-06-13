@@ -16,4 +16,13 @@ class ConnectionSettings(context: Context) {
     var alwaysConnected: Boolean
         get() = prefs.getBoolean("always_connected", false)
         set(v) = prefs.edit().putBoolean("always_connected", v).apply()
+
+    /**
+     * The Maker's declared availability (RFP §7.3 3b): "available" | "busy" | "dnd".
+     * Sent on every heartbeat so Titan can *reason* about whether to speak (missions P4) —
+     * it is NOT a coded mute here. Default "available".
+     */
+    var availability: String
+        get() = prefs.getString("availability", "available") ?: "available"
+        set(v) = prefs.edit().putString("availability", v).apply()
 }

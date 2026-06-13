@@ -57,6 +57,7 @@ fun ChatScreen(
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onOpenSettings: () -> Unit,
+    onFeedback: (Int?, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize().background(TitanInk)) {
@@ -66,7 +67,7 @@ fun ChatScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item { Spacer(Modifier.height(8.dp)) }
-            items(turns) { turn -> Bubble(turn) }
+            items(turns) { turn -> Bubble(turn, onFeedback) }
             if (sending) {
                 item { TypingBubble() }
             }
@@ -111,16 +112,18 @@ private fun ChatHeader(titanLabel: String, resting: Boolean, onOpenSettings: () 
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Bubble(turn: ChatTurn) {
+private fun Bubble(turn: ChatTurn, onFeedback: (Int?, String) -> Unit = { _, _ -> }) {
     val mine = turn.fromMaker
     var menuOpen by remember { mutableStateOf(false) }
+    var reacted by remember(turn.id) { mutableStateOf<String?>(null) }
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start,
     ) {
-        Box {
+        Column(horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+          Box {
             Box(
                 modifier = Modifier
                     .widthIn(max = 300.dp)
@@ -161,6 +164,40 @@ private fun Bubble(turn: ChatTurn) {
                         )
                     },
                 )
+            }
+          }
+          // Feedback chips on Titan's turns (RFP §7.3 3b) — a signal Titan learns from.
+          if (!mine) {
+              FeedbackChips(reacted) { reaction ->
+                  reacted = reaction
+                  onFeedback(seqOf(turn.id), reaction)
+              }
+          }
+        }
+    }
+}
+
+/** Parse the originating event seq from a turn id ("evt-<seq>"); null for owner/manual turns. */
+private fun seqOf(id: String): Int? = id.removePrefix("evt-").toIntOrNull()
+
+@Composable
+private fun FeedbackChips(picked: String?, onPick: (String) -> Unit) {
+    Row(
+        modifier = Modifier.padding(top = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        listOf("👍" to "like", "👎" to "dislike", "useful" to "useful",
+               "interesting" to "interesting").forEach { (label, reaction) ->
+            val on = picked == reaction
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (on) TitanCyan else TitanSurfaceHi)
+                    .clickable { onPick(reaction) }
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                Text(label, color = if (on) TitanInk else TitanMuted,
+                     style = MaterialTheme.typography.labelSmall)
             }
         }
     }

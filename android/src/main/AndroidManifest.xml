@@ -53,6 +53,12 @@
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"
             tools:node="merge" />
+
+        <!-- Channel-2 action-button taps (RFP §7.3 3a) → a headless signed /console/events/
+             respond. Not exported: only our own notification PendingIntents trigger it. -->
+        <receiver
+            android:name=".link.ResponseReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>
