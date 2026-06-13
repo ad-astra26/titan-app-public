@@ -70,6 +70,19 @@ class EventsClientTest {
     }
 
     @Test
+    fun urgency_decodes_off_the_wire_default_normal() = runBlocking {
+        // The §7.2b warm-the-line + urgent heads-up both branch on this field, so it
+        // must survive the wire: explicit "high" preserved, absent defaults to "normal".
+        val body = ("""{"events":[{"seq":1,"type":"message","urgency":"high","payload":{"text":"now"}},""" +
+            """{"seq":2,"type":"message","payload":{"text":"later"}}],"cursor":2}""")
+            .encodeToByteArray()
+        val resp = ConsoleClient("http://x", FakeTransport(HttpResponse(200, body)))
+            .events(signer, wait = 0, since = 0)
+        assertEquals("high", resp.events[0].urgency)
+        assertEquals("normal", resp.events[1].urgency)
+    }
+
+    @Test
     fun events_non_200_returns_empty_keeping_cursor() = runBlocking {
         val fake = FakeTransport(HttpResponse(401, """{"error":"nope"}""".encodeToByteArray()))
         val resp = ConsoleClient("http://x", fake).events(signer, wait = 0, since = 12)

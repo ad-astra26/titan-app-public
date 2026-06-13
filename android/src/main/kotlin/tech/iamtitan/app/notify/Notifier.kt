@@ -43,8 +43,14 @@ class Notifier(private val context: Context) {
         )
         mgr.createNotificationChannel(
             NotificationChannel(CHANNEL_LINK, "Titan link", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Shown briefly while Titan is replying"
+                description = "Shown while Titan stays connected"
                 setShowBadge(false)
+            },
+        )
+        mgr.createNotificationChannel(
+            NotificationChannel(CHANNEL_URGENT, "Titan urgent", NotificationManager.IMPORTANCE_HIGH).apply {
+                description = "Time-sensitive messages from Titan"
+                enableVibration(true)
             },
         )
     }
@@ -56,6 +62,22 @@ class Notifier(private val context: Context) {
             .setContentText(text)
             .setOngoing(true)
             .build()
+
+    /** A time-sensitive ("urgency=high") Titan message → a heads-up on the urgent
+     *  channel, distinct from a normal reply so it stands out. Persisted to ChatStore
+     *  separately by the caller. */
+    fun notifyUrgent(text: String) {
+        if (!canPost()) return
+        ensureChannels()
+        val n = baseBuilder(CHANNEL_URGENT, android.R.drawable.stat_notify_chat)
+            .setContentTitle("Titan — urgent")
+            .setContentText(text.take(240))
+            .setStyle(Notification.BigTextStyle().bigText(text.take(1000)))
+            .setCategory(Notification.CATEGORY_MESSAGE)
+            .setAutoCancel(true)
+            .build()
+        NotificationManagerCompat.from(context).notify(URGENT_NOTIF_ID, n)
+    }
 
     /** Post a "Titan replied" notification iff allowed; no-op (safely) otherwise. */
     fun notifyReply(text: String) {
@@ -131,9 +153,11 @@ class Notifier(private val context: Context) {
         const val CHANNEL_CHAT = "titan.chat"
         const val CHANNEL_HEALTH = "titan.health"
         const val CHANNEL_LINK = "titan.link"
+        const val CHANNEL_URGENT = "titan.urgent"
         const val REPLY_NOTIF_ID = 1001
         const val LINK_NOTIF_ID = 1002
         const val HEALTH_NOTIF_ID = 1003
+        const val URGENT_NOTIF_ID = 1004
 
         /** Intent extra the health-notification Restart action sets on MainActivity. */
         const val EXTRA_ACTION = "titan.action"

@@ -5,6 +5,7 @@ import android.app.Application
 import android.os.Bundle
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
+import tech.iamtitan.app.link.ConnectionManager
 
 /**
  * Process-scoped state the chat send-pipeline needs to survive the Activity being
@@ -24,6 +25,14 @@ class TitanApp : Application(), Application.ActivityLifecycleCallbacks {
     // network work hops to Dispatchers.IO via withContext. Process-lifetime (not
     // Activity-bound) so an in-flight reply survives backgrounding.
     val appScope: CoroutineScope = MainScope()
+
+    /**
+     * The event-channel drain loop + tier state machine (RFP §7.2a). A process
+     * singleton (constructed lazily on first paired bind) so the held long-poll
+     * survives Activity recreation — the per-Activity [TitanController] only binds a
+     * renderer + drives lifecycle transitions into it.
+     */
+    val connection: ConnectionManager by lazy { ConnectionManager(appScope, this) }
 
     @Volatile
     var isForeground: Boolean = false

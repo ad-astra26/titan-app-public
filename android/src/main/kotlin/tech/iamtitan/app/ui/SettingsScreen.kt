@@ -19,6 +19,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -38,13 +40,25 @@ import tech.iamtitan.app.data.LockMode
 fun SettingsScreen(
     lockMode: LockMode,
     lockTimerMinutes: Int,
+    alwaysConnected: Boolean,
     onLockModeChange: (LockMode) -> Unit,
     onTimerChange: (Int) -> Unit,
+    onAlwaysConnectedChange: (Boolean) -> Unit,
     onClose: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().background(TitanInk).systemBarsPadding()) {
         SettingsHeader(onClose)
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Connection", color = TitanText, fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleSmall)
+            ToggleRow(
+                title = "Stay connected",
+                subtitle = "Get Titan's messages instantly in the background. Shows a quiet ongoing " +
+                    "notification and uses a little more battery. Off = messages arrive every ~15 min.",
+                checked = alwaysConnected,
+                onChange = onAlwaysConnectedChange,
+            )
+            Spacer(Modifier.height(8.dp))
             Text("App lock", color = TitanText, fontWeight = FontWeight.SemiBold,
                 style = MaterialTheme.typography.titleSmall)
             Text(
@@ -64,6 +78,40 @@ fun SettingsScreen(
             LockOption(LockMode.OFF, "Off", "No lock screen. (Signing still verifies you about every 8 hours.)",
                 lockMode, onLockModeChange)
         }
+    }
+}
+
+@Composable
+private fun ToggleRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(TitanSurface)
+            .clickable { onChange(!checked) }
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = TitanText, fontWeight = FontWeight.Medium)
+            Text(subtitle, color = TitanMuted, style = MaterialTheme.typography.bodySmall)
+        }
+        Spacer(Modifier.size(8.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = TitanInk,
+                checkedTrackColor = TitanCyan,
+                uncheckedThumbColor = TitanMuted,
+                uncheckedTrackColor = TitanSurfaceHi,
+            ),
+        )
     }
 }
 

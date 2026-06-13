@@ -172,8 +172,10 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
         SettingsScreen(
             lockMode = controller.lockMode,
             lockTimerMinutes = controller.lockTimerMinutes,
+            alwaysConnected = controller.alwaysConnected,
             onLockModeChange = controller::updateLockMode,
             onTimerChange = controller::updateLockTimerMinutes,
+            onAlwaysConnectedChange = controller::updateAlwaysConnected,
             onClose = controller::closeSettings,
         )
     }

@@ -1,7 +1,5 @@
 package tech.iamtitan.app
 
-import android.content.Context
-import android.os.BatteryManager
 import android.os.Build
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -11,9 +9,6 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tech.iamtitan.app.chat.ChatRepository
@@ -21,6 +16,7 @@ import tech.iamtitan.app.chat.ChatResult
 import tech.iamtitan.app.chat.ChatTurn
 import tech.iamtitan.app.crypto.DeviceKey
 import tech.iamtitan.app.data.ChatStore
+import tech.iamtitan.app.data.ConnectionSettings
 import tech.iamtitan.app.data.LockMode
 import tech.iamtitan.app.data.PairingStore
 import tech.iamtitan.app.data.SecuritySettings
@@ -29,8 +25,7 @@ import tech.iamtitan.app.net.AndroidHttpTransport
 import tech.iamtitan.app.net.ConsoleClient
 import tech.iamtitan.app.net.ConsoleEvent
 import tech.iamtitan.app.notify.Notifier
-import tech.iamtitan.app.service.TitanReplyService
-import tech.iamtitan.app.work.EventPollWorker
+import tech.iamtitan.app.service.TitanLinkService
 import tech.iamtitan.app.pairing.SubmitRequest
 import tech.iamtitan.app.pairing.code6
 import tech.iamtitan.app.pairing.parsePairingPayload
@@ -54,8 +49,12 @@ class TitanController(
     private val store = PairingStore(context)
     private val chatStore = ChatStore(context)
     private val security = SecuritySettings(context)
+    private val connectionSettings = ConnectionSettings(context)
     private val notifier = Notifier(context).apply { ensureChannels() }
     private val activityProvider = { activity }
+    // The event-channel loop + tier machine is a process singleton (RFP §7.2a) — this
+    // per-Activity controller only binds a renderer and drives lifecycle into it.
+    private val connection = (activity.application as TitanApp).connection
 
     /** True when any Activity is started — drives "notify vs update live UI". */
     private fun appIsForeground(): Boolean = (context as? TitanApp)?.isForeground ?: true
@@ -75,10 +74,12 @@ class TitanController(
     var lockTimerMinutes by mutableStateOf(security.lockTimerMinutes); private set
     private var lastBackgroundAt = 0L
 
+    // ── "Stay connected" opt-in (RFP §7.2b — persistent always-on link) ──
+    var alwaysConnected by mutableStateOf(connectionSettings.alwaysConnected); private set
+
     private var signer: DeviceKey? = null
     private var repo: ChatRepository? = null
     private var pendingCode6: String? = null
-    private var eventLoopJob: Job? = null
 
     private fun baseUrl(): String = store.endpointUrl ?: DEFAULT_DEV_ENDPOINT
     // Pinned TLS (AG-TLS): the transport pins the QR's cert sha256 when present.
@@ -102,6 +103,10 @@ class TitanController(
     private fun bindChat(key: DeviceKey) {
         signer = key
         repo = ChatRepository(client(), key)
+        // Hand the singleton loop a fresh signer source + this Activity's renderer,
+        // and seed the always-on flag so the tier is correct before any service callback.
+        connection.bind(signer = { signer }, render = ::processEvents)
+        connection.setAlwaysOn(connectionSettings.alwaysConnected)
     }
 
     /** A scanned/pasted QR payload → seal a key, submit, show the code to match. */
@@ -188,11 +193,13 @@ class TitanController(
         addTurn(ChatTurn(fromMaker = true, text = text, ts = nowMs(), id = newId()))
         draft = ""
         sending = true
+        connection.onSending(true) // keep the event loop held (ACTIVE_TASK) if backgrounded
         // The request runs on the process-lifetime appScope (not the Activity's),
         // and a short foreground service keeps the process un-frozen so a reply
         // that lands after the Maker backgrounds the app is NOT dropped (the
         // reported quirk). The biometric to sign happens here, while foregrounded.
-        TitanReplyService.start(context)
+        // Skip when always-connected: the persistent service already holds the line.
+        if (!alwaysConnected) TitanLinkService.startShort(context)
         scope.launch {
             val result = try {
                 withContext(Dispatchers.IO) { repository.send(text) }
@@ -200,6 +207,7 @@ class TitanController(
                 ChatResult.Failed(e.message ?: "Network error.")
             }
             sending = false
+            connection.onSending(false)
             val replyText = when (result) {
                 is ChatResult.Reply -> { resting = false; result.text }
                 is ChatResult.Declined -> { resting = false; result.reason }
@@ -213,7 +221,7 @@ class TitanController(
             // Backgrounded when the reply landed ⇒ surface it as a native notification;
             // it's already persisted, so opening the app shows it in the transcript too.
             if (!appIsForeground()) notifier.notifyReply(replyText)
-            TitanReplyService.stop(context)
+            if (!alwaysConnected) TitanLinkService.stop(context)
         }
     }
 
@@ -232,55 +240,21 @@ class TitanController(
             }
         }
         evaluateLockOnForeground()
-        if (store.paired && !locked) startEventLoop()
+        if (store.paired && !locked) {
+            connection.onForeground()
+            // Ensure the persistent anchor is running (started from foreground, as the
+            // Android-12+ FGS-start rule requires). Idempotent re-foreground if already up.
+            if (alwaysConnected) TitanLinkService.startPersistent(context)
+        }
     }
 
     /** Activity stopped — note when, for the TIMER lock policy. */
     fun onBackground() {
         if (store.paired) lastBackgroundAt = System.currentTimeMillis()
-        stopEventLoop()
+        connection.onBackground()
     }
 
-    // ── Event channel (RFP_titan_app_event_channel Phase 1) ────────────────────
-    /**
-     * Foreground drain: a held long-poll on `GET /console/events` while the app is
-     * open (near-instant delivery). Runs on the process-lifetime [scope] so it isn't
-     * torn by an Activity recreation; cancelled on background, where WorkManager
-     * ([EventPollWorker]) takes over the ~15-min cadence. Idempotent.
-     */
-    fun startEventLoop() {
-        val key = signer ?: return
-        if (!store.paired || eventLoopJob?.isActive == true) return
-        EventPollWorker.schedule(context) // background cadence (KEEP-idempotent)
-        eventLoopJob = scope.launch {
-            heartbeat(key, "foreground")
-            while (isActive) {
-                val t0 = System.currentTimeMillis()
-                val resp = try {
-                    withContext(Dispatchers.IO) {
-                        client().events(key, wait = LONGPOLL_WAIT, since = store.eventCursor)
-                    }
-                } catch (_: Exception) {
-                    delay(BACKOFF_MS); continue
-                }
-                if (resp.events.isNotEmpty()) {
-                    processEvents(resp.events)
-                    store.eventCursor = resp.cursor
-                    heartbeat(key, "foreground") // carries ack_cursor = the new cursor
-                } else if (System.currentTimeMillis() - t0 < MIN_POLL_MS) {
-                    // Server fast-failed (401 / kernel down) instead of holding — back off.
-                    delay(BACKOFF_MS)
-                }
-            }
-        }
-    }
-
-    fun stopEventLoop() {
-        eventLoopJob?.cancel()
-        eventLoopJob = null
-        signer?.let { key -> scope.launch { heartbeat(key, "background") } }
-    }
-
+    // ── Event channel (RFP_titan_app_event_channel §7.2a) ──────────────────────
     /** Render drained events into the UI/notifications (deliver-once via the cursor +
      *  a per-seq turn id). Unknown types are ignored (forward-compatible). */
     private fun processEvents(events: List<ConsoleEvent>) {
@@ -289,7 +263,9 @@ class TitanController(
                 "message", "reply" -> {
                     val text = e.messageText() ?: continue
                     addBotTurnFromEvent(e.seq, text)
-                    if (!appIsForeground()) notifier.notifyReply(text)
+                    if (!appIsForeground()) {
+                        if (e.urgency == "high") notifier.notifyUrgent(text) else notifier.notifyReply(text)
+                    }
                 }
                 "health" -> {
                     val up = e.healthUp()
@@ -318,19 +294,6 @@ class TitanController(
         }
     }
 
-    private suspend fun heartbeat(key: DeviceKey, state: String) {
-        try {
-            withContext(Dispatchers.IO) {
-                client().heartbeat(key, state, store.eventCursor, batteryPct())
-            }
-        } catch (_: Exception) { /* presence is best-effort */ }
-    }
-
-    private fun batteryPct(): Int? =
-        (context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager)
-            ?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-            ?.takeIf { it in 0..100 }
-
     private fun addBotTurnFromEvent(seq: Int, text: String) {
         val id = "evt-$seq"
         if (turns.any { it.id == id }) return
@@ -358,7 +321,7 @@ class TitanController(
         scope.launch {
             if (key.unlock()) {
                 locked = false
-                if (store.paired) startEventLoop() // gated off while locked
+                if (store.paired) connection.onForeground() // event loop is gated off while locked
             }
         }
     }
@@ -374,6 +337,20 @@ class TitanController(
     fun updateLockTimerMinutes(minutes: Int) {
         lockTimerMinutes = minutes
         security.lockTimerMinutes = minutes
+    }
+
+    /** Toggle the "Stay connected" persistent link (RFP §7.2b). Started from the
+     *  foreground (Settings), satisfying the Android-12+ FGS-start rule. */
+    fun updateAlwaysConnected(on: Boolean) {
+        alwaysConnected = on
+        connectionSettings.alwaysConnected = on
+        if (on) {
+            TitanLinkService.startPersistent(context)
+            connection.setAlwaysOn(true)
+        } else {
+            TitanLinkService.stop(context)
+            connection.setAlwaysOn(false)
+        }
     }
 
     /** Append a turn and persist the transcript (survives a process kill). */
@@ -396,12 +373,5 @@ class TitanController(
     companion object {
         /** Emulator → host loopback. Real phones get the endpoint from the QR (Tailscale). */
         const val DEFAULT_DEV_ENDPOINT = "http://10.0.2.2:7799"
-
-        /** Held long-poll window (s) — matches the server clamp (`events._MAX_WAIT_S`). */
-        private const val LONGPOLL_WAIT = 25
-
-        /** Back-off after a fast-failing drain (kernel down / 401) to avoid a tight loop. */
-        private const val BACKOFF_MS = 3000L
-        private const val MIN_POLL_MS = 2000L
     }
 }

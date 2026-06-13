@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Reach the Console Agent over Tailscale / nginx-TLS / localhost. -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -7,9 +8,12 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
-    <!-- Keep the process un-frozen while a chat reply is in flight (TitanReplyService). -->
+    <!-- Keep the process un-frozen while a chat reply is in flight / staying connected
+         (TitanLinkService). SHORT mode = dataSync; PERSISTENT (always-on) = specialUse
+         (no 6 h/24 h cap, unlike dataSync on API 34+). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- Native "Titan replied" notifications (runtime grant on API 33+). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
@@ -31,11 +35,24 @@
             </intent-filter>
         </activity>
 
-        <!-- Short FGS that keeps the in-flight chat reply alive across backgrounding. -->
+        <!-- FGS process anchor for the event channel. SHORT = dataSync (chat reply /
+             urgency warm), PERSISTENT = specialUse (opt-in always-connected long-poll). -->
         <service
-            android:name=".service.TitanReplyService"
+            android:name=".service.TitanLinkService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="dataSync|specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Maintains the user's own opt-in persistent long-poll link to their self-hosted Titan Console Agent for instant background message delivery without Google services (FCM/GMS), per the no-Google design." />
+        </service>
+
+        <!-- The urgency warm-the-line promotes the WorkManager job to a foreground service
+             (EventPollWorker.setForeground) → WorkManager's own service must declare the
+             dataSync type. tools:node=merge keeps WorkManager's other attributes. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:node="merge" />
     </application>
 
 </manifest>
