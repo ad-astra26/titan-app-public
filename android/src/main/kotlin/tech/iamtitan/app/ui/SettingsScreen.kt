@@ -2,6 +2,8 @@ package tech.iamtitan.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -48,7 +50,12 @@ fun SettingsScreen(
 ) {
     Column(modifier = Modifier.fillMaxSize().background(TitanInk).systemBarsPadding()) {
         SettingsHeader(onClose)
-        Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Scrollable content — the section list now exceeds a phone screen (Connection +
+        // App-lock), so without this the lower options were clipped + unreachable.
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             Text("Connection", color = TitanText, fontWeight = FontWeight.SemiBold,
                 style = MaterialTheme.typography.titleSmall)
             ToggleRow(
