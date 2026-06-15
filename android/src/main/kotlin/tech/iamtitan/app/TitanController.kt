@@ -11,6 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import tech.iamtitan.app.chat.ChatAction
 import tech.iamtitan.app.chat.ChatRepository
 import tech.iamtitan.app.chat.ChatResult
 import tech.iamtitan.app.chat.ChatTurn
@@ -24,6 +25,7 @@ import java.util.UUID
 import tech.iamtitan.app.net.AndroidHttpTransport
 import tech.iamtitan.app.net.ConsoleClient
 import tech.iamtitan.app.net.ConsoleEvent
+import tech.iamtitan.app.net.EventAction
 import tech.iamtitan.app.notify.Notifier
 import tech.iamtitan.app.service.TitanLinkService
 import tech.iamtitan.app.pairing.SubmitRequest
@@ -277,8 +279,42 @@ class TitanController(
                         up, e.healthText() ?: if (up) "Titan recovered." else "Titan is down.",
                     )
                 }
+                "system" -> {
+                    // Channel-2 actionable event (RFP §7.3 3a) — render an actionable card in
+                    // the chat AND post the notification (its buttons + ack flow). Foreground
+                    // no longer drops these (the bug the live test caught).
+                    val text = e.systemText() ?: continue
+                    addSystemTurn(e.seq, text, e.systemActions())
+                    notifier.notifySystem(text, e.systemActions(), e.seq)
+                }
                 else -> Unit
             }
+        }
+    }
+
+    private fun addSystemTurn(seq: Int, text: String, actions: List<EventAction>) {
+        val id = "evt-$seq"
+        if (turns.any { it.id == id }) return
+        addTurn(
+            ChatTurn(
+                fromMaker = false, text = text, ts = nowMs(), id = id,
+                actions = actions.map { ChatAction(it.id, it.label, it.needsApp) },
+            ),
+        )
+    }
+
+    /** In-app tap on a system card's action button (RFP §7.3 3a): sign + send, mark the
+     *  card "✓ Acknowledged", and clear the shade notification. */
+    fun onAction(seq: Int, actionId: String, label: String) {
+        onRespondRequested(seq, actionId, label)
+    }
+
+    /** Reflect a chosen action on the in-memory + persisted turn (drives the card ack). */
+    private fun markRespondedInMemory(seq: Int, actionId: String) {
+        val i = turns.indexOfFirst { it.id == "evt-$seq" }
+        if (i >= 0 && turns[i].respondedAction == null) {
+            turns[i] = turns[i].copy(respondedAction = actionId)
+            persist()
         }
     }
 
@@ -300,8 +336,10 @@ class TitanController(
     /** A Channel-2 action button completed via the app (RFP §7.3 — a `needs_app` action, or
      *  a headless tap whose key-window had lapsed). Signs + posts the response; the inbox is
      *  durable so this is best-effort. */
-    fun onRespondRequested(seq: Int, actionId: String) {
+    fun onRespondRequested(seq: Int, actionId: String, label: String = actionId) {
         val key = signer ?: return
+        markRespondedInMemory(seq, actionId)      // optimistic card ack
+        notifier.ackSystem(seq, label)            // clear/ack the shade notification
         scope.launch {
             try {
                 withContext(Dispatchers.IO) {

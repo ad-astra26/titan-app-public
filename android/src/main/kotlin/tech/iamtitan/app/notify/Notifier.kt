@@ -142,7 +142,29 @@ class Notifier(private val context: Context) {
                 ).build(),
             )
         }
-        NotificationManagerCompat.from(context).notify(SYSTEM_NOTIF_ID, builder.build())
+        // Per-event id so distinct system messages don't overwrite each other and each
+        // can be acknowledged/cleared independently after its button is tapped.
+        NotificationManagerCompat.from(context).notify(SYSTEM_NOTIF_BASE + seq, builder.build())
+    }
+
+    /** Visual acknowledgment after a Channel-2 action is chosen (RFP §7.3 — the Maker asked
+     *  for confirmation the tap registered). Replaces the lingering actionable notification
+     *  with a brief "✓ Acknowledged" that auto-dismisses. */
+    fun ackSystem(seq: Int, label: String) {
+        if (!canPost()) { cancelSystem(seq); return }
+        ensureChannels()
+        val n = baseBuilder(CHANNEL_SYSTEM, android.R.drawable.checkbox_on_background)
+            .setContentTitle("Titan")
+            .setContentText("✓ Acknowledged: $label")
+            .setAutoCancel(true)
+            .setTimeoutAfter(5000)
+            .build()
+        NotificationManagerCompat.from(context).notify(SYSTEM_NOTIF_BASE + seq, n)
+    }
+
+    /** Remove a system notification outright (no ack text). */
+    fun cancelSystem(seq: Int) {
+        NotificationManagerCompat.from(context).cancel(SYSTEM_NOTIF_BASE + seq)
     }
 
     /** A high-stakes action opens the app (which signs + sends with UI feedback); a
@@ -155,6 +177,7 @@ class Notifier(private val context: Context) {
                 .putExtra(EXTRA_ACTION, ACTION_RESPOND)
                 .putExtra(EXTRA_SEQ, seq)
                 .putExtra(EXTRA_ACTION_ID, action.id)
+                .putExtra(EXTRA_ACTION_LABEL, action.label)
             PendingIntent.getActivity(
                 context, rc, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
@@ -164,6 +187,7 @@ class Notifier(private val context: Context) {
                 .setAction(ACTION_RESPOND)
                 .putExtra(EXTRA_SEQ, seq)
                 .putExtra(EXTRA_ACTION_ID, action.id)
+                .putExtra(EXTRA_ACTION_LABEL, action.label)
             PendingIntent.getBroadcast(
                 context, rc, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
@@ -215,7 +239,8 @@ class Notifier(private val context: Context) {
         const val LINK_NOTIF_ID = 1002
         const val HEALTH_NOTIF_ID = 1003
         const val URGENT_NOTIF_ID = 1004
-        const val SYSTEM_NOTIF_ID = 1005
+        /** Base for per-event system notification ids (SYSTEM_NOTIF_BASE + seq). */
+        const val SYSTEM_NOTIF_BASE = 2000
 
         /** Intent extra the health-notification Restart action sets on MainActivity. */
         const val EXTRA_ACTION = "titan.action"
@@ -226,5 +251,6 @@ class Notifier(private val context: Context) {
         const val ACTION_RESPOND = "respond_action"
         const val EXTRA_SEQ = "titan.seq"
         const val EXTRA_ACTION_ID = "titan.action_id"
+        const val EXTRA_ACTION_LABEL = "titan.action_label"
     }
 }

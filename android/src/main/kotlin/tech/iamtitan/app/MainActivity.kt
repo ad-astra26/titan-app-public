@@ -85,6 +85,7 @@ class MainActivity : FragmentActivity() {
                 if (actionId != null) {
                     controller.onRespondRequested(
                         intent.getIntExtra(Notifier.EXTRA_SEQ, -1), actionId,
+                        intent.getStringExtra(Notifier.EXTRA_ACTION_LABEL) ?: actionId,
                     )
                 }
             }
@@ -167,6 +168,7 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
             onSend = controller::onSend,
             onOpenSettings = controller::openSettings,
             onFeedback = { seq, reaction -> controller.onFeedback(seq, reaction) },
+            onAction = { seq, id, label -> controller.onAction(seq, id, label) },
         )
     }
 

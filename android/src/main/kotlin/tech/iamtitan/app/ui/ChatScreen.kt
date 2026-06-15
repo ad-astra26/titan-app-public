@@ -58,6 +58,7 @@ fun ChatScreen(
     onSend: () -> Unit,
     onOpenSettings: () -> Unit,
     onFeedback: (Int?, String) -> Unit,
+    onAction: (Int, String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize().background(TitanInk)) {
@@ -67,7 +68,7 @@ fun ChatScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item { Spacer(Modifier.height(8.dp)) }
-            items(turns) { turn -> Bubble(turn, onFeedback) }
+            items(turns) { turn -> Bubble(turn, onFeedback, onAction) }
             if (sending) {
                 item { TypingBubble() }
             }
@@ -112,7 +113,11 @@ private fun ChatHeader(titanLabel: String, resting: Boolean, onOpenSettings: () 
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Bubble(turn: ChatTurn, onFeedback: (Int?, String) -> Unit = { _, _ -> }) {
+private fun Bubble(
+    turn: ChatTurn,
+    onFeedback: (Int?, String) -> Unit = { _, _ -> },
+    onAction: (Int, String, String) -> Unit = { _, _, _ -> },
+) {
     val mine = turn.fromMaker
     var menuOpen by remember { mutableStateOf(false) }
     var reacted by remember(turn.id) { mutableStateOf<String?>(null) }
@@ -166,13 +171,47 @@ private fun Bubble(turn: ChatTurn, onFeedback: (Int?, String) -> Unit = { _, _ -
                 )
             }
           }
-          // Feedback chips on Titan's turns (RFP §7.3 3b) — a signal Titan learns from.
-          if (!mine) {
+          // A Channel-2 actionable system card (RFP §7.3 3a) shows its buttons (or the
+          // "✓ Acknowledged" confirmation); a regular Titan turn shows feedback chips.
+          if (turn.actions.isNotEmpty()) {
+              ActionRow(turn) { id, label -> onAction(seqOf(turn.id) ?: -1, id, label) }
+          } else if (!mine) {
               FeedbackChips(reacted) { reaction ->
                   reacted = reaction
                   onFeedback(seqOf(turn.id), reaction)
               }
           }
+        }
+    }
+}
+
+@Composable
+private fun ActionRow(turn: ChatTurn, onPick: (String, String) -> Unit) {
+    val responded = turn.respondedAction
+    if (responded != null) {
+        val label = turn.actions.firstOrNull { it.id == responded }?.label ?: responded
+        Text(
+            "✓ $label",
+            color = TitanCyan,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+    } else {
+        Row(
+            modifier = Modifier.padding(top = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            turn.actions.forEach { a ->
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(TitanCyan)
+                        .clickable { onPick(a.id, a.label) }
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                ) {
+                    Text(a.label, color = TitanInk, style = MaterialTheme.typography.labelMedium)
+                }
+            }
         }
     }
 }

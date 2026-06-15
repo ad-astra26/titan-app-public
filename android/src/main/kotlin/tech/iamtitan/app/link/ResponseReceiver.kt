@@ -8,7 +8,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tech.iamtitan.app.MainActivity
+import tech.iamtitan.app.chat.chatSessionFor
 import tech.iamtitan.app.crypto.DeviceKey
+import tech.iamtitan.app.data.ChatStore
 import tech.iamtitan.app.data.PairingStore
 import tech.iamtitan.app.net.AndroidHttpTransport
 import tech.iamtitan.app.net.ConsoleClient
@@ -30,11 +32,19 @@ class ResponseReceiver : BroadcastReceiver() {
         if (intent.action != Notifier.ACTION_RESPOND) return
         val seq = intent.getIntExtra(Notifier.EXTRA_SEQ, -1)
         val actionId = intent.getStringExtra(Notifier.EXTRA_ACTION_ID) ?: return
+        val label = intent.getStringExtra(Notifier.EXTRA_ACTION_LABEL) ?: actionId
         val app = context.applicationContext
         val pending = goAsync()
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                if (!sendHeadless(app, seq, actionId)) {
+                if (sendHeadless(app, seq, actionId)) {
+                    // Visual ack (RFP §7.3): clear the lingering notification + reflect the
+                    // choice in the transcript so the in-app card shows "✓ Acknowledged".
+                    Notifier(app).ackSystem(seq, label)
+                    PairingStore(app).deviceId?.let {
+                        ChatStore(app).markResponded(chatSessionFor(it), "evt-$seq", actionId)
+                    }
+                } else {
                     openAppFallback(app, seq, actionId)
                 }
             } catch (_: Exception) {

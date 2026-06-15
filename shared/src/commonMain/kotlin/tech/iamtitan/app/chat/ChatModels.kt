@@ -57,4 +57,15 @@ data class ChatTurn(
     val status: TurnStatus = TurnStatus.COMPLETE,
     /** stable id so a PENDING reply can be replaced in place once it arrives. */
     val id: String = "",
+    /** Channel-2 actionable buttons (RFP §7.3 3a) — non-empty only for a `type:"system"`
+     *  turn; renders as an actionable card in the chat. */
+    val actions: List<ChatAction> = emptyList(),
+    /** The action id the Maker chose (null = not yet acted) — drives the in-card
+     *  "✓ Acknowledged" confirmation after a tap. */
+    val respondedAction: String? = null,
 )
+
+/** A Channel-2 action affordance persisted on a [ChatTurn] (RFP §7.3 3a). Mirror of
+ *  `net.EventAction`, kept in `chat/` to avoid a net↔chat dependency cycle. */
+@Serializable
+data class ChatAction(val id: String, val label: String, val needsApp: Boolean = false)
