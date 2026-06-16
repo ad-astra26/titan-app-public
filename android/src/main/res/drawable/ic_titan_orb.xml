@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Titan orb (RFP §7.3 splash) — a cyan→violet→ink radial gradient sphere, the same
+     brand mark the Home header draws in Compose. Used as the cold-start splash icon. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    <path android:pathData="M60,60m-52,0a52,52 0,1 1,104 0a52,52 0,1 1,-104 0">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="44"
+                android:centerY="40"
+                android:gradientRadius="72">
+                <item android:offset="0.0" android:color="#FF6FE3F0" />
+                <item android:offset="0.45" android:color="#FF4DD0E1" />
+                <item android:offset="0.78" android:color="#FF9C7BFF" />
+                <item android:offset="1.0" android:color="#FF141A24" />
+            </gradient>
+        </aapt:attr>
+    </path>
+</vector>

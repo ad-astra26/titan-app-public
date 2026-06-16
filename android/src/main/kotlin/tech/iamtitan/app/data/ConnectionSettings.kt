@@ -25,4 +25,10 @@ class ConnectionSettings(context: Context) {
     var availability: String
         get() = prefs.getString("availability", "available") ?: "available"
         set(v) = prefs.edit().putString("availability", v).apply()
+
+    /** How many Alerts/Info items the Maker has already seen (RFP §7.3 — the unread badge
+     *  is `alertsStore.size - seenAlertsCount`, so headless-delivered alerts still count). */
+    var seenAlertsCount: Int
+        get() = prefs.getInt("seen_alerts_count", 0)
+        set(v) = prefs.edit().putInt("seen_alerts_count", v).apply()
 }

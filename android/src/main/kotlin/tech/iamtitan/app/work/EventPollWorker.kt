@@ -54,7 +54,6 @@ class EventPollWorker(context: Context, params: WorkerParameters) :
         val key = DeviceKey.existing(ctx, store) { error("no activity in background") }
             ?: return Result.success()
         val client = ConsoleClient(endpoint, AndroidHttpTransport(tlsPin = store.tlsPin))
-        val session = chatSessionFor(deviceId)
 
         return try {
             val resp = withContext(Dispatchers.IO) {
@@ -62,12 +61,12 @@ class EventPollWorker(context: Context, params: WorkerParameters) :
             }
             var hadUrgent = false
             if (resp.events.isNotEmpty()) {
-                hadUrgent = EventRenderer.render(ctx, resp.events, session)
+                hadUrgent = EventRenderer.render(ctx, resp.events, deviceId)
                 store.eventCursor = resp.cursor
             }
             withContext(Dispatchers.IO) { client.heartbeat(key, "background", store.eventCursor) }
             if (hadUrgent && !ConnectionSettings(ctx).alwaysConnected) {
-                warmTheLine(client, key, store, session)
+                warmTheLine(client, key, store, deviceId)
             }
             Result.success()
         } catch (_: Exception) {
@@ -80,7 +79,7 @@ class EventPollWorker(context: Context, params: WorkerParameters) :
         client: ConsoleClient,
         key: DeviceKey,
         store: PairingStore,
-        session: String,
+        deviceId: String,
     ) {
         try {
             setForeground(warmForegroundInfo())
@@ -97,7 +96,7 @@ class EventPollWorker(context: Context, params: WorkerParameters) :
                 break
             }
             if (resp.events.isNotEmpty()) {
-                EventRenderer.render(applicationContext, resp.events, session)
+                EventRenderer.render(applicationContext, resp.events, deviceId)
                 store.eventCursor = resp.cursor
                 withContext(Dispatchers.IO) { client.heartbeat(key, "background", store.eventCursor) }
             }

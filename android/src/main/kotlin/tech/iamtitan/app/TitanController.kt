@@ -15,6 +15,7 @@ import tech.iamtitan.app.chat.ChatAction
 import tech.iamtitan.app.chat.ChatRepository
 import tech.iamtitan.app.chat.ChatResult
 import tech.iamtitan.app.chat.ChatTurn
+import tech.iamtitan.app.chat.alertsSessionFor
 import tech.iamtitan.app.crypto.DeviceKey
 import tech.iamtitan.app.data.ChatStore
 import tech.iamtitan.app.data.ConnectionSettings
@@ -35,7 +36,7 @@ import tech.iamtitan.app.ui.PairingUiState
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
-enum class Screen { Pairing, Chat }
+enum class Screen { Pairing, Home, Chat, Alerts }
 
 /**
  * Drives the M1 "Hello Titan" slice: QR → keygen (sealed) → submit → code-match
@@ -64,6 +65,10 @@ class TitanController(
     var screen by mutableStateOf(Screen.Pairing); private set
     var pairing by mutableStateOf<PairingUiState>(PairingUiState.NotPaired); private set
     val turns: SnapshotStateList<ChatTurn> = mutableStateListOf()
+    // Channel-2 feed (RFP §7.3 / INV-MIS-TWO-CHANNELS) — Titan's system/health/ops
+    // messages live in their OWN timeline, separate from the conversational chat.
+    val alerts: SnapshotStateList<ChatTurn> = mutableStateListOf()
+    var unreadAlerts by mutableStateOf(0); private set
     var draft by mutableStateOf(""); private set
     var sending by mutableStateOf(false); private set
     var resting by mutableStateOf(false); private set
@@ -97,8 +102,13 @@ class TitanController(
                 // Rehydrate the transcript so history survives a process kill (the
                 // "chat gone after hours" quirk). repo is set by bindChat above.
                 repo?.session?.let { turns.addAll(chatStore.load(it)) }
+                alertsSession()?.let {
+                    alerts.addAll(chatStore.load(it))
+                    unreadAlerts = (alerts.size - connectionSettings.seenAlertsCount)
+                        .coerceAtLeast(0)
+                }
                 pairing = PairingUiState.Paired(store.label)
-                screen = Screen.Chat
+                screen = Screen.Home
                 // Cold-start lock: every mode except OFF requires an unlock to begin.
                 locked = lockMode != LockMode.OFF
             }
@@ -172,7 +182,7 @@ class TitanController(
                 if (me != null) {
                     store.paired = true
                     pairing = PairingUiState.Paired(store.label)
-                    screen = Screen.Chat
+                    screen = Screen.Home
                 } else {
                     pairing = PairingUiState.Error(
                         "Not confirmed yet. Enter the code in your Command Center, then tap “Try again”.",
@@ -244,6 +254,17 @@ class TitanController(
                 turns.addAll(persisted)
             }
         }
+        // Re-sync the Alerts/Info timeline too (a headless delivery may have grown it) +
+        // recompute the unread badge from what the Maker has actually seen.
+        alertsSession()?.let { session ->
+            val persisted = chatStore.load(session)
+            if (persisted.size != alerts.size) {
+                alerts.clear()
+                alerts.addAll(persisted)
+            }
+            unreadAlerts = if (screen == Screen.Alerts) 0
+            else (alerts.size - connectionSettings.seenAlertsCount).coerceAtLeast(0)
+        }
         evaluateLockOnForeground()
         if (store.paired && !locked) {
             connection.onForeground()
@@ -265,6 +286,7 @@ class TitanController(
     private fun processEvents(events: List<ConsoleEvent>) {
         for (e in events) {
             when (e.type) {
+                // Channel 1 — conversational. Stays in the chat timeline.
                 "message", "reply" -> {
                     val text = e.messageText() ?: continue
                     addBotTurnFromEvent(e.seq, text)
@@ -272,19 +294,17 @@ class TitanController(
                         if (e.urgency == "high") notifier.notifyUrgent(text) else notifier.notifyReply(text)
                     }
                 }
+                // Channel 2 — info/decisions. Live in the SEPARATE Alerts/Info timeline.
                 "health" -> {
                     val up = e.healthUp()
                     resting = !up
-                    notifier.notifyHealth(
-                        up, e.healthText() ?: if (up) "Titan recovered." else "Titan is down.",
-                    )
+                    val text = e.healthText() ?: if (up) "Titan recovered." else "Titan is down."
+                    addAlertTurn(e.seq, text)
+                    notifier.notifyHealth(up, text)
                 }
                 "system" -> {
-                    // Channel-2 actionable event (RFP §7.3 3a) — render an actionable card in
-                    // the chat AND post the notification (its buttons + ack flow). Foreground
-                    // no longer drops these (the bug the live test caught).
                     val text = e.systemText() ?: continue
-                    addSystemTurn(e.seq, text, e.systemActions())
+                    addAlertTurn(e.seq, text, e.systemActions())
                     notifier.notifySystem(text, e.systemActions(), e.seq)
                 }
                 else -> Unit
@@ -292,15 +312,31 @@ class TitanController(
         }
     }
 
-    private fun addSystemTurn(seq: Int, text: String, actions: List<EventAction>) {
+    /** Append a Channel-2 item to the Alerts/Info timeline (deduped by seq), persist it, and
+     *  bump the unread badge unless the Maker is currently viewing Alerts. */
+    private fun addAlertTurn(seq: Int, text: String, actions: List<EventAction> = emptyList()) {
         val id = "evt-$seq"
-        if (turns.any { it.id == id }) return
-        addTurn(
+        if (alerts.any { it.id == id }) return
+        alerts.add(
             ChatTurn(
                 fromMaker = false, text = text, ts = nowMs(), id = id,
                 actions = actions.map { ChatAction(it.id, it.label, it.needsApp) },
             ),
         )
+        persistAlerts()
+        if (screen != Screen.Alerts) unreadAlerts++
+    }
+
+    private fun alertsSession(): String? = store.deviceId?.let { alertsSessionFor(it) }
+    private fun persistAlerts() { alertsSession()?.let { chatStore.save(it, alerts.toList()) } }
+
+    // ── Home navigation (RFP §7.3 — landing view + the two channels) ──
+    fun goHome() { screen = Screen.Home }
+    fun goChat() { screen = Screen.Chat }
+    fun goAlerts() {
+        screen = Screen.Alerts
+        unreadAlerts = 0
+        connectionSettings.seenAlertsCount = alerts.size  // headless-delivered alerts count too
     }
 
     /** In-app tap on a system card's action button (RFP §7.3 3a): sign + send, mark the
@@ -309,12 +345,12 @@ class TitanController(
         onRespondRequested(seq, actionId, label)
     }
 
-    /** Reflect a chosen action on the in-memory + persisted turn (drives the card ack). */
+    /** Reflect a chosen action on the in-memory + persisted alert card (drives the card ack). */
     private fun markRespondedInMemory(seq: Int, actionId: String) {
-        val i = turns.indexOfFirst { it.id == "evt-$seq" }
-        if (i >= 0 && turns[i].respondedAction == null) {
-            turns[i] = turns[i].copy(respondedAction = actionId)
-            persist()
+        val i = alerts.indexOfFirst { it.id == "evt-$seq" }
+        if (i >= 0 && alerts[i].respondedAction == null) {
+            alerts[i] = alerts[i].copy(respondedAction = actionId)
+            persistAlerts()
         }
     }
 
@@ -371,6 +407,15 @@ class TitanController(
         availabilityState = value
         connection.nudgeHeartbeat()
     }
+
+    /** Home-screen quick chip: cycle available → busy → dnd → available. */
+    fun cycleAvailability() = setAvailability(
+        when (availabilityState) {
+            "available" -> "busy"
+            "busy" -> "dnd"
+            else -> "available"
+        },
+    )
 
     private fun addBotTurnFromEvent(seq: Int, text: String) {
         val id = "evt-$seq"

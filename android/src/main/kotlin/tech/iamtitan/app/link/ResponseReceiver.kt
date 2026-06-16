@@ -8,7 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import tech.iamtitan.app.MainActivity
-import tech.iamtitan.app.chat.chatSessionFor
+import tech.iamtitan.app.chat.alertsSessionFor
 import tech.iamtitan.app.crypto.DeviceKey
 import tech.iamtitan.app.data.ChatStore
 import tech.iamtitan.app.data.PairingStore
@@ -42,7 +42,7 @@ class ResponseReceiver : BroadcastReceiver() {
                     // choice in the transcript so the in-app card shows "✓ Acknowledged".
                     Notifier(app).ackSystem(seq, label)
                     PairingStore(app).deviceId?.let {
-                        ChatStore(app).markResponded(chatSessionFor(it), "evt-$seq", actionId)
+                        ChatStore(app).markResponded(alertsSessionFor(it), "evt-$seq", actionId)
                     }
                 } else {
                     openAppFallback(app, seq, actionId)

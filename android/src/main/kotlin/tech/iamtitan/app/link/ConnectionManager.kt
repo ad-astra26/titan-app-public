@@ -163,7 +163,7 @@ class ConnectionManager(
             return
         }
         val deviceId = store.deviceId ?: return
-        EventRenderer.render(context, events, chatSessionFor(deviceId))
+        EventRenderer.render(context, events, deviceId)
     }
 
     private fun stopLoop() {

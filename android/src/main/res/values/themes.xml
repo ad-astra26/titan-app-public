@@ -7,4 +7,13 @@
         <item name="android:statusBarColor">#0B0E14</item>
         <item name="android:navigationBarColor">#0B0E14</item>
     </style>
+
+    <!-- Cold-start splash (AndroidX SplashScreen API): the Titan orb on brand ink, then
+         hands off to Theme.Titan once Compose is ready. No artificial delay — it covers
+         the real init window. -->
+    <style name="Theme.Titan.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#0B0E14</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_titan_orb</item>
+        <item name="postSplashScreenTheme">@style/Theme.Titan</item>
+    </style>
 </resources>

@@ -16,6 +16,12 @@ import tech.iamtitan.app.net.RequestSigner
 fun chatSessionFor(deviceId: String): String =
     "console-$deviceId".take(64).padEnd(8, '0')
 
+/** The Channel-2 (Alerts/Info) timeline session for a device — a separate transcript from
+ *  the conversational chat (RFP §7.3 / INV-MIS-TWO-CHANNELS). All paths (controller, the
+ *  headless EventRenderer, the ResponseReceiver) MUST derive it the same way. */
+fun alertsSessionFor(deviceId: String): String =
+    "${chatSessionFor(deviceId)}__alerts"
+
 class ChatRepository(
     private val client: ConsoleClient,
     private val signer: RequestSigner,

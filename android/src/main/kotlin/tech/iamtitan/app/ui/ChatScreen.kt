@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -33,6 +34,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,13 +59,22 @@ fun ChatScreen(
     onDraftChange: (String) -> Unit,
     onSend: () -> Unit,
     onOpenSettings: () -> Unit,
+    onBack: () -> Unit,
     onFeedback: (Int?, String) -> Unit,
     onAction: (Int, String, String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxSize().background(TitanInk)) {
-        ChatHeader(titanLabel, resting, onOpenSettings)
+        ChatHeader(titanLabel, resting, onBack, onOpenSettings)
+        // Auto-scroll to the latest line on open + when a new turn lands (RFP §7.3 #1) —
+        // the Maker shouldn't have to scroll down through a long history.
+        val listState = rememberLazyListState()
+        // Items = leading spacer + turns + optional typing + trailing spacer; scroll to the
+        // trailing spacer so the newest line is fully visible.
+        val lastIndex = turns.size + (if (sending) 1 else 0) + 1
+        LaunchedEffect(lastIndex) { listState.scrollToItem(lastIndex) }
         LazyColumn(
+            state = listState,
             modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
@@ -79,7 +90,12 @@ fun ChatScreen(
 }
 
 @Composable
-private fun ChatHeader(titanLabel: String, resting: Boolean, onOpenSettings: () -> Unit) {
+private fun ChatHeader(
+    titanLabel: String,
+    resting: Boolean,
+    onBack: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     Surface(color = TitanSurface, shadowElevation = 2.dp) {
         Row(
             // statusBarsPadding: the colored header bleeds under the status bar, content
@@ -88,6 +104,14 @@ private fun ChatHeader(titanLabel: String, resting: Boolean, onOpenSettings: () 
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Text(
+                "‹",
+                color = TitanText,
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.clip(RoundedCornerShape(20.dp))
+                    .clickable(onClick = onBack).padding(horizontal = 8.dp),
+            )
+            Spacer(Modifier.size(6.dp))
             TitanOrb(size = 34)
             Spacer(Modifier.size(12.dp))
             Column(modifier = Modifier.weight(1f)) {

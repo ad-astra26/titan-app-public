@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,7 +26,9 @@ import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import com.google.zxing.integration.android.IntentIntegrator
 import tech.iamtitan.app.notify.Notifier
+import tech.iamtitan.app.ui.AlertsScreen
 import tech.iamtitan.app.ui.ChatScreen
+import tech.iamtitan.app.ui.HomeScreen
 import tech.iamtitan.app.ui.LockScreen
 import tech.iamtitan.app.ui.PairingScreen
 import tech.iamtitan.app.ui.SettingsScreen
@@ -47,6 +50,9 @@ class MainActivity : FragmentActivity() {
     private lateinit var controller: TitanController
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Native cold-start splash (Theme.Titan.Starting — the orb on ink). MUST be called
+        // before super.onCreate so the system hands off the splash window to us.
+        installSplashScreen()
         // Edge-to-edge is enforced on targetSdk 35; declare it explicitly so the bars are
         // transparent with correct icon contrast. Each screen consumes its own insets.
         enableEdgeToEdge()
@@ -89,6 +95,11 @@ class MainActivity : FragmentActivity() {
                     )
                 }
             }
+        }
+        // A notification body tap routes to the right channel (RFP §7.3).
+        when (intent?.getStringExtra(Notifier.EXTRA_NAV)) {
+            Notifier.NAV_ALERTS -> controller.goAlerts()
+            Notifier.NAV_CHAT -> controller.goChat()
         }
     }
 
@@ -158,6 +169,16 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
             onRetry = controller::onRetry,
             onConfirmed = controller::onConfirmed,
         )
+        Screen.Home -> HomeScreen(
+            titanLabel = controller.titanLabel,
+            resting = controller.resting,
+            availability = controller.availabilityState,
+            unreadAlerts = controller.unreadAlerts,
+            onChat = controller::goChat,
+            onAlerts = controller::goAlerts,
+            onSettings = controller::openSettings,
+            onCycleAvailability = controller::cycleAvailability,
+        )
         Screen.Chat -> ChatScreen(
             titanLabel = controller.titanLabel,
             turns = controller.turns,
@@ -167,7 +188,13 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
             onDraftChange = controller::onDraftChange,
             onSend = controller::onSend,
             onOpenSettings = controller::openSettings,
+            onBack = controller::goHome,
             onFeedback = { seq, reaction -> controller.onFeedback(seq, reaction) },
+            onAction = { seq, id, label -> controller.onAction(seq, id, label) },
+        )
+        Screen.Alerts -> AlertsScreen(
+            alerts = controller.alerts,
+            onBack = controller::goHome,
             onAction = { seq, id, label -> controller.onAction(seq, id, label) },
         )
     }

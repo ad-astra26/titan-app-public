@@ -81,6 +81,7 @@ class Notifier(private val context: Context) {
             .setContentText(text.take(240))
             .setStyle(Notification.BigTextStyle().bigText(text.take(1000)))
             .setCategory(Notification.CATEGORY_MESSAGE)
+            .setContentIntent(navIntent(NAV_CHAT))
             .setAutoCancel(true)
             .build()
         NotificationManagerCompat.from(context).notify(URGENT_NOTIF_ID, n)
@@ -94,6 +95,7 @@ class Notifier(private val context: Context) {
             .setContentTitle("Titan")
             .setContentText(text.take(240))
             .setStyle(Notification.BigTextStyle().bigText(text.take(1000)))
+            .setContentIntent(navIntent(NAV_CHAT))
             .setAutoCancel(true)
             .build()
         NotificationManagerCompat.from(context).notify(REPLY_NOTIF_ID, n)
@@ -109,6 +111,7 @@ class Notifier(private val context: Context) {
             .setContentTitle(if (up) "Titan recovered" else "Titan is down")
             .setContentText(text.take(240))
             .setStyle(Notification.BigTextStyle().bigText(text.take(1000)))
+            .setContentIntent(navIntent(NAV_ALERTS))
             .setAutoCancel(true)
         if (!up) {
             builder.addAction(
@@ -133,6 +136,7 @@ class Notifier(private val context: Context) {
             .setContentTitle("Titan")
             .setContentText(text.take(240))
             .setStyle(Notification.BigTextStyle().bigText(text.take(1000)))
+            .setContentIntent(navIntent(NAV_ALERTS))
             .setAutoCancel(true)
         actions.forEachIndexed { i, a ->
             builder.addAction(
@@ -213,6 +217,18 @@ class Notifier(private val context: Context) {
         )
     }
 
+    /** Content intent that opens the app to a destination (RFP §7.3 — "shown also in app"):
+     *  reply → Chat, system/health → the Alerts/Info timeline. */
+    private fun navIntent(dest: String): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra(EXTRA_NAV, dest)
+        return PendingIntent.getActivity(
+            context, dest.hashCode(), intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
     /** Opens the app carrying the restart request — the Activity has a signing window
      *  (and can prompt if it lapsed), so the kernel restart runs with UI feedback. */
     private fun restartIntent(): PendingIntent {
@@ -252,5 +268,10 @@ class Notifier(private val context: Context) {
         const val EXTRA_SEQ = "titan.seq"
         const val EXTRA_ACTION_ID = "titan.action_id"
         const val EXTRA_ACTION_LABEL = "titan.action_label"
+
+        /** Notification-body tap destination (RFP §7.3 — open the app to the right channel). */
+        const val EXTRA_NAV = "titan.nav"
+        const val NAV_CHAT = "chat"
+        const val NAV_ALERTS = "alerts"
     }
 }

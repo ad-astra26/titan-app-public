@@ -24,8 +24,8 @@ android {
         applicationId = "tech.iamtitan.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.1.6"
+        versionCode = 8
+        versionName = "0.1.7"
     }
 
     signingConfigs {
@@ -70,6 +70,7 @@ kotlin {
 dependencies {
     implementation(project(":shared"))
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

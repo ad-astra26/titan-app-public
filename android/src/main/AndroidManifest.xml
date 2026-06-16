@@ -23,7 +23,7 @@
         android:label="Titan"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
-        android:theme="@style/Theme.Titan">
+        android:theme="@style/Theme.Titan.Starting">
         <!-- usesCleartextTraffic: the Tailscale tailnet is WireGuard-encrypted end to end,
              and localhost dev is loopback; the nginx fallback host uses TLS. -->
         <activity
