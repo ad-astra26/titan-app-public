@@ -165,9 +165,11 @@ class ConsoleClient(
     suspend fun journal(signer: RequestSigner, lines: Int = 80): JournalTail? =
         getJson(signer, "/console/journal", JournalTail.serializer(), query = "lines=$lines")
 
-    /** GET /console/api/v6/nervous-system — module/subsystem health summary. */
+    /** GET /console/api/v6/readiness — kernel WORKER-module roster (module_count / modules
+     *  [name,state,pid] / module_state_summary). NOT /v6/nervous-system: that returns the 11
+     *  cognitive AXES (REFLEX/FOCUS/…), not the workers (verified live 2026-06-20). */
     suspend fun nervousSystem(signer: RequestSigner): NervousSystem? =
-        getJson(signer, "/console/api/v6/nervous-system", NervousSystem.serializer())
+        getJson(signer, "/console/api/v6/readiness", NervousSystem.serializer())
 
     /** GET /console/config[?section=] — all config keys (value+help+editable+source). */
     suspend fun config(signer: RequestSigner, section: String? = null): ConfigList? =

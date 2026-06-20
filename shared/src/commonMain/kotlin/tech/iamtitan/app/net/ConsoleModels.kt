@@ -59,7 +59,7 @@ data class TitanLiveness(
 @Serializable
 data class Systemd(val active_state: String? = null, val sub_state: String? = null)
 
-// ── GET /console/api/v6/nervous-system → v6.py module summary ──
+// ── GET /console/api/v6/readiness → get_v6_readiness worker-module summary (v6.py) ──
 @Serializable
 data class NervousSystem(
     val module_count: Int? = null,
