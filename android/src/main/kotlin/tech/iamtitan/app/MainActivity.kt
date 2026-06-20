@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -223,6 +224,19 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
     if (controller.locked) {
         LockScreen(onUnlock = controller::unlock)
     }
+
+    // System back / predictive-back → in-app navigation (v0.1.8). Compose registers these in
+    // composition order; the OnBackPressedDispatcher invokes the LAST-registered *enabled*
+    // callback (LIFO), so writing them base → settings → lock gives precedence lock > settings
+    // > base screen. Home/Pairing intentionally have NO handler → the default back exits the app.
+    BackHandler(enabled = controller.screen == Screen.Chat || controller.screen == Screen.Alerts) {
+        controller.goHome()
+    }
+    BackHandler(enabled = controller.showSettings) {
+        controller.closeSettings()
+    }
+    // A locked phone must never be dismissed via back — consume it (no-op).
+    BackHandler(enabled = controller.locked) { /* consume — do not bypass the lock */ }
 }
 
 /** Dev fallback (no camera): paste the QR JSON the Command Center prints. */
