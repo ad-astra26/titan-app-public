@@ -387,7 +387,9 @@ class TitanController(
 
     // ── Diagnostics + config console ──
     fun goDiagnostics() { screen = Screen.Diagnostics; refreshDiagnostics() }
-    fun goConfig() { screen = Screen.Config; if (configEntries.isEmpty()) refreshConfig() }
+    // Always re-fetch on open so the app reflects the paired Titan's CURRENT config values +
+    // (friendly) help, never a stale cache (Maker: "reload value for T1 into app", 2026-06-20).
+    fun goConfig() { screen = Screen.Config; refreshConfig() }
 
     /** Fetch every diagnostics readout in parallel-ish (sequential off-main calls on one signer).
      * Each is independently null-safe so a single unreachable readout doesn't blank the screen. */

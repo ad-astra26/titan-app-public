@@ -56,8 +56,10 @@ fun DiagnosticsScreen(
             Spacer(Modifier.width(12.dp))
             Text("Diagnostics", color = TitanText, fontWeight = FontWeight.SemiBold,
                 style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            PillButton(if (loading) "…" else "↻ Refresh", onRefresh)
+            Text(if (loading) "Refreshing…" else "Pull to refresh ↓", color = TitanMuted,
+                style = MaterialTheme.typography.labelSmall)
         }
+        TitanPullRefresh(refreshing = loading, onRefresh = onRefresh) {
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
@@ -139,6 +141,7 @@ fun DiagnosticsScreen(
                 )
             }
             Spacer(Modifier.width(4.dp))
+        }
         }
     }
 }

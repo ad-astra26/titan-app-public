@@ -65,7 +65,8 @@ fun ConfigScreen(
             Spacer(Modifier.width(12.dp))
             Text("Config", color = TitanText, fontWeight = FontWeight.SemiBold,
                 style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            ConfigPill(if (loading) "…" else "↻", onRefresh)
+            Text(if (loading) "Refreshing…" else "Pull to refresh ↓", color = TitanMuted,
+                style = MaterialTheme.typography.labelSmall)
         }
         banner?.let {
             Text(it, color = TitanWarn, style = MaterialTheme.typography.bodySmall,
@@ -89,14 +90,16 @@ fun ConfigScreen(
             }
             return@Column
         }
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(shown, key = { "${it.file}:${it.dotted}:${it.lineno}" }) { e ->
-                ConfigRow(e) { if (e.editable) editing = e }
+        TitanPullRefresh(refreshing = loading, onRefresh = onRefresh) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(shown, key = { "${it.file}:${it.dotted}:${it.lineno}" }) { e ->
+                    ConfigRow(e) { if (e.editable) editing = e }
+                }
+                item { Spacer(Modifier.width(4.dp)) }
             }
-            item { Spacer(Modifier.width(4.dp)) }
         }
     }
 

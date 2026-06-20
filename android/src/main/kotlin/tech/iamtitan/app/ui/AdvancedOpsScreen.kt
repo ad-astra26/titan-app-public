@@ -73,12 +73,14 @@ fun AdvancedOpsScreen(
             Spacer(Modifier.width(12.dp))
             Text("Advanced ops", color = TitanText, fontWeight = FontWeight.SemiBold,
                 style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            OpsPill(if (loading) "…" else "↻ Refresh", onRefresh)
+            Text(if (loading) "Refreshing…" else "Pull to refresh ↓", color = TitanMuted,
+                style = MaterialTheme.typography.labelSmall)
         }
         banner?.let {
             Text(it, color = TitanCyan, style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
         }
+        TitanPullRefresh(refreshing = loading, onRefresh = onRefresh) {
         Column(
             modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp),
@@ -195,6 +197,7 @@ fun AdvancedOpsScreen(
                 }
             }
             Spacer(Modifier.width(4.dp))
+        }
         }
     }
 
