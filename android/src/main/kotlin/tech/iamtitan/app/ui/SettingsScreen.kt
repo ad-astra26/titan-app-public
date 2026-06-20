@@ -44,10 +44,16 @@ fun SettingsScreen(
     lockTimerMinutes: Int,
     alwaysConnected: Boolean,
     availability: String,
+    presenceLocation: Boolean,
+    presenceTime: Boolean,
+    presenceBattery: Boolean,
     onLockModeChange: (LockMode) -> Unit,
     onTimerChange: (Int) -> Unit,
     onAlwaysConnectedChange: (Boolean) -> Unit,
     onAvailabilityChange: (String) -> Unit,
+    onPresenceLocationChange: (Boolean) -> Unit,
+    onPresenceTimeChange: (Boolean) -> Unit,
+    onPresenceBatteryChange: (Boolean) -> Unit,
     onClose: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().background(TitanInk).systemBarsPadding()) {
@@ -81,6 +87,34 @@ fun SettingsScreen(
                 availability, onAvailabilityChange)
             AvailabilityOption("dnd", "Do not disturb", "Only the most important, by his judgment.",
                 availability, onAvailabilityChange)
+            Spacer(Modifier.height(8.dp))
+            Text("Presence", color = TitanText, fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleSmall)
+            Text(
+                "What you let Titan sense about your world. Each is opt-in and off by default; " +
+                    "it's collected only while on and sampled in the background about every 15 min.",
+                color = TitanMuted, style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(4.dp))
+            ToggleRow(
+                title = "Share location",
+                subtitle = "Your approximate location (GPS/network — no Google services). Lets Titan " +
+                    "know where in the world you are.",
+                checked = presenceLocation,
+                onChange = onPresenceLocationChange,
+            )
+            ToggleRow(
+                title = "Share local time",
+                subtitle = "Your time zone and local clock — so Titan knows what hour it is in your world.",
+                checked = presenceTime,
+                onChange = onPresenceTimeChange,
+            )
+            ToggleRow(
+                title = "Share battery",
+                subtitle = "Your phone's battery level.",
+                checked = presenceBattery,
+                onChange = onPresenceBatteryChange,
+            )
             Spacer(Modifier.height(8.dp))
             Text("App lock", color = TitanText, fontWeight = FontWeight.SemiBold,
                 style = MaterialTheme.typography.titleSmall)

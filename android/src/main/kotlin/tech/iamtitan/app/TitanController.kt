@@ -21,7 +21,10 @@ import tech.iamtitan.app.data.ChatStore
 import tech.iamtitan.app.data.ConnectionSettings
 import tech.iamtitan.app.data.LockMode
 import tech.iamtitan.app.data.PairingStore
+import tech.iamtitan.app.data.PresenceStore
 import tech.iamtitan.app.data.SecuritySettings
+import tech.iamtitan.app.presence.PresenceCollector
+import tech.iamtitan.app.work.PresenceWorker
 import java.util.UUID
 import tech.iamtitan.app.net.AndroidHttpTransport
 import tech.iamtitan.app.net.BackupView
@@ -61,6 +64,7 @@ class TitanController(
     private val chatStore = ChatStore(context)
     private val security = SecuritySettings(context)
     private val connectionSettings = ConnectionSettings(context)
+    private val presenceStore = PresenceStore(context)
     private val notifier = Notifier(context).apply { ensureChannels() }
     private val activityProvider = { activity }
     // The event-channel loop + tier machine is a process singleton (RFP §7.2a) — this
@@ -107,6 +111,14 @@ class TitanController(
     var configLoading by mutableStateOf(false); private set
     var configSections by mutableStateOf<List<String>>(emptyList()); private set
     var configEntries by mutableStateOf<List<ConfigEntry>>(emptyList()); private set
+
+    // ── Phase 3: presence opt-in (AG6). Per-sensor toggles → console-local store + signed
+    //    backend settings + the background sampler. All default OFF. ──
+    var presenceLocation by mutableStateOf(presenceStore.locationEnabled); private set
+    var presenceTime by mutableStateOf(presenceStore.timeEnabled); private set
+    var presenceBattery by mutableStateOf(presenceStore.batteryEnabled); private set
+    /** Set by MainActivity to request the runtime location grant when the Maker enables location. */
+    var onRequestLocationPermission: (() -> Unit)? = null
 
     private var signer: DeviceKey? = null
     private var repo: ChatRepository? = null
@@ -533,6 +545,39 @@ class TitanController(
 
     fun openSettings() { showSettings = true }
     fun closeSettings() { showSettings = false }
+
+    // ── Presence opt-in (Phase 3 / AG6) ──
+    fun togglePresenceLocation(on: Boolean) {
+        presenceStore.locationEnabled = on
+        presenceLocation = on
+        // Enabling location needs the OS grant; request it (best-effort — if denied, the
+        // collector simply omits location, so the rest of presence still works).
+        if (on && !PresenceCollector.hasLocationPermission(context)) {
+            onRequestLocationPermission?.invoke()
+        }
+        syncPresence()
+    }
+
+    fun togglePresenceTime(on: Boolean) {
+        presenceStore.timeEnabled = on; presenceTime = on; syncPresence()
+    }
+
+    fun togglePresenceBattery(on: Boolean) {
+        presenceStore.batteryEnabled = on; presenceBattery = on; syncPresence()
+    }
+
+    /** Reconcile the background sampler + push the opt-in to the backend (which gates server-side
+     *  too — defence in depth). Schedule while any sensor is on; cancel when all are off. */
+    private fun syncPresence() {
+        if (presenceStore.anyEnabled) PresenceWorker.schedule(context, presenceStore.cadenceMinutes)
+        else PresenceWorker.cancel(context)
+        val key = signer ?: return
+        scope.launch {
+            try {
+                withContext(Dispatchers.IO) { client().setPresenceSettings(key, presenceStore.settings()) }
+            } catch (_: Exception) { /* local store is the app's source of truth; retry next toggle */ }
+        }
+    }
 
     fun updateLockMode(mode: LockMode) {
         lockMode = mode

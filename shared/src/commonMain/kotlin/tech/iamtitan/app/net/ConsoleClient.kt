@@ -14,6 +14,10 @@ import tech.iamtitan.app.chat.ChatRequestBody
 import tech.iamtitan.app.chat.ChatResult
 import tech.iamtitan.app.crypto.sha256
 import tech.iamtitan.app.pairing.DeviceRecord
+import tech.iamtitan.app.presence.ContextBody
+import tech.iamtitan.app.presence.PresenceLatest
+import tech.iamtitan.app.presence.PresenceSample
+import tech.iamtitan.app.presence.PresenceSettings
 import tech.iamtitan.app.pairing.SubmitRequest
 import tech.iamtitan.app.pairing.SubmitResponse
 import tech.iamtitan.app.pairing.WireJson
@@ -205,6 +209,34 @@ class ConsoleClient(
             latestTs = latest?.get("ts")?.scalarOrNull(),
             arweaveEvents = manifest?.get("events")?.intOrNull2(),
         )
+    }
+
+    // ── Presence / context uplink (RFP_titan_mobile_app Phase 3 / AG6) ──
+
+    /** POST /console/context — upload opt-in-gated context samples. true on 200. */
+    suspend fun uploadContext(signer: RequestSigner, samples: List<PresenceSample>): Boolean {
+        if (samples.isEmpty()) return true
+        val body = WireJson.encodeToString(
+            ContextBody.serializer(), ContextBody(samples),
+        ).encodeToByteArray()
+        return signedRequest(signer, "POST", "/console/context", body).status == 200
+    }
+
+    /** GET /console/presence — the Maker's latest uploaded context (flat; no cognition). */
+    suspend fun presence(signer: RequestSigner): PresenceLatest? =
+        getJson(signer, "/console/presence", PresenceLatest.serializer())
+
+    /** GET /console/presence/settings — per-sensor opt-in flags + cadence. */
+    suspend fun presenceSettings(signer: RequestSigner): PresenceSettings? =
+        getJson(signer, "/console/presence/settings", PresenceSettings.serializer())
+
+    /** POST /console/presence/settings — patch opt-in flags / cadence; returns the merged set. */
+    suspend fun setPresenceSettings(signer: RequestSigner, patch: PresenceSettings): PresenceSettings? {
+        val body = WireJson.encodeToString(PresenceSettings.serializer(), patch).encodeToByteArray()
+        val resp = signedRequest(signer, "POST", "/console/presence/settings", body)
+        return runCatching {
+            WireJson.decodeFromString(PresenceSettings.serializer(), resp.bodyText())
+        }.getOrNull()
     }
 
     private suspend fun rawGet(signer: RequestSigner, consolePath: String): JsonObject? =

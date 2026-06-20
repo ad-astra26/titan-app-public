@@ -70,6 +70,7 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
+        controller.onRequestLocationPermission = ::requestLocationPermission
         maybeRequestNotificationPermission()
         handleActionIntent(intent)
         // DEBUG-only: inject a pairing payload over adb for headless emulator testing.
@@ -133,6 +134,21 @@ class MainActivity : FragmentActivity() {
         )
     }
 
+    /** Request foreground location for the presence opt-in (AG6). Background location +
+     *  precise/approximate are the OS's follow-up dialogs; if the Maker declines, the
+     *  collector simply omits location (the rest of presence still works). */
+    private fun requestLocationPermission() {
+        val needed = arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+        ).filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (needed.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, needed.toTypedArray(), REQ_LOCATION)
+        }
+    }
+
     @Suppress("DEPRECATION")
     private fun launchScan() {
         IntentIntegrator(this).apply {
@@ -157,6 +173,7 @@ class MainActivity : FragmentActivity() {
 
     private companion object {
         const val REQ_POST_NOTIFICATIONS = 0x4E0F // 16-bit-safe request code
+        const val REQ_LOCATION = 0x4E10           // 16-bit-safe request code
     }
 }
 
@@ -237,10 +254,16 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
             lockTimerMinutes = controller.lockTimerMinutes,
             alwaysConnected = controller.alwaysConnected,
             availability = controller.availabilityState,
+            presenceLocation = controller.presenceLocation,
+            presenceTime = controller.presenceTime,
+            presenceBattery = controller.presenceBattery,
             onLockModeChange = controller::updateLockMode,
             onTimerChange = controller::updateLockTimerMinutes,
             onAlwaysConnectedChange = controller::updateAlwaysConnected,
             onAvailabilityChange = controller::setAvailability,
+            onPresenceLocationChange = controller::togglePresenceLocation,
+            onPresenceTimeChange = controller::togglePresenceTime,
+            onPresenceBatteryChange = controller::togglePresenceBattery,
             onClose = controller::closeSettings,
         )
     }
