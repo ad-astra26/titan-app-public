@@ -29,6 +29,8 @@ import com.google.zxing.integration.android.IntentIntegrator
 import tech.iamtitan.app.notify.Notifier
 import tech.iamtitan.app.ui.AlertsScreen
 import tech.iamtitan.app.ui.ChatScreen
+import tech.iamtitan.app.ui.ConfigScreen
+import tech.iamtitan.app.ui.DiagnosticsScreen
 import tech.iamtitan.app.ui.HomeScreen
 import tech.iamtitan.app.ui.LockScreen
 import tech.iamtitan.app.ui.PairingScreen
@@ -177,6 +179,8 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
             unreadAlerts = controller.unreadAlerts,
             onChat = controller::goChat,
             onAlerts = controller::goAlerts,
+            onDiagnostics = controller::goDiagnostics,
+            onConfig = controller::goConfig,
             onSettings = controller::openSettings,
             onCycleAvailability = controller::cycleAvailability,
         )
@@ -197,6 +201,25 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
             alerts = controller.alerts,
             onBack = controller::goHome,
             onAction = { seq, id, label -> controller.onAction(seq, id, label) },
+        )
+        Screen.Diagnostics -> DiagnosticsScreen(
+            loading = controller.diagLoading,
+            status = controller.diagStatus,
+            host = controller.diagHost,
+            ns = controller.diagNs,
+            metabolism = controller.diagMetabolism,
+            backups = controller.diagBackups,
+            journal = controller.diagJournal,
+            onBack = controller::goHome,
+            onRefresh = controller::refreshDiagnostics,
+        )
+        Screen.Config -> ConfigScreen(
+            loading = controller.configLoading,
+            sections = controller.configSections,
+            entries = controller.configEntries,
+            onBack = controller::goHome,
+            onRefresh = controller::refreshConfig,
+            onSave = controller::saveConfig,
         )
     }
 
@@ -229,7 +252,10 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
     // composition order; the OnBackPressedDispatcher invokes the LAST-registered *enabled*
     // callback (LIFO), so writing them base → settings → lock gives precedence lock > settings
     // > base screen. Home/Pairing intentionally have NO handler → the default back exits the app.
-    BackHandler(enabled = controller.screen == Screen.Chat || controller.screen == Screen.Alerts) {
+    BackHandler(
+        enabled = controller.screen == Screen.Chat || controller.screen == Screen.Alerts ||
+            controller.screen == Screen.Diagnostics || controller.screen == Screen.Config,
+    ) {
         controller.goHome()
     }
     BackHandler(enabled = controller.showSettings) {

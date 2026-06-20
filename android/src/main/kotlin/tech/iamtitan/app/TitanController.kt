@@ -24,9 +24,17 @@ import tech.iamtitan.app.data.PairingStore
 import tech.iamtitan.app.data.SecuritySettings
 import java.util.UUID
 import tech.iamtitan.app.net.AndroidHttpTransport
+import tech.iamtitan.app.net.BackupView
+import tech.iamtitan.app.net.ConfigEntry
 import tech.iamtitan.app.net.ConsoleClient
 import tech.iamtitan.app.net.ConsoleEvent
 import tech.iamtitan.app.net.EventAction
+import tech.iamtitan.app.net.HostResources
+import tech.iamtitan.app.net.JournalTail
+import tech.iamtitan.app.net.MetabolismView
+import tech.iamtitan.app.net.NervousSystem
+import tech.iamtitan.app.net.SetConfigResult
+import tech.iamtitan.app.net.TitanLiveness
 import tech.iamtitan.app.notify.Notifier
 import tech.iamtitan.app.service.TitanLinkService
 import tech.iamtitan.app.pairing.SubmitRequest
@@ -36,7 +44,7 @@ import tech.iamtitan.app.ui.PairingUiState
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
-enum class Screen { Pairing, Home, Chat, Alerts }
+enum class Screen { Pairing, Home, Chat, Alerts, Diagnostics, Config }
 
 /**
  * Drives the M1 "Hello Titan" slice: QR → keygen (sealed) → submit → code-match
@@ -86,6 +94,19 @@ class TitanController(
 
     // ── Declared availability (RFP §7.3 3b — a hint Titan reasons about, not a mute) ──
     var availabilityState by mutableStateOf(connectionSettings.availability); private set
+
+    // ── Phase 2a: in-app diagnostics + config console (read-only diag + config R/W). All
+    //    fetched over existing signed Console routes; null = not-yet-loaded / unreachable. ──
+    var diagLoading by mutableStateOf(false); private set
+    var diagStatus by mutableStateOf<TitanLiveness?>(null); private set
+    var diagHost by mutableStateOf<HostResources?>(null); private set
+    var diagNs by mutableStateOf<NervousSystem?>(null); private set
+    var diagMetabolism by mutableStateOf<MetabolismView?>(null); private set
+    var diagBackups by mutableStateOf<BackupView?>(null); private set
+    var diagJournal by mutableStateOf<JournalTail?>(null); private set
+    var configLoading by mutableStateOf(false); private set
+    var configSections by mutableStateOf<List<String>>(emptyList()); private set
+    var configEntries by mutableStateOf<List<ConfigEntry>>(emptyList()); private set
 
     private var signer: DeviceKey? = null
     private var repo: ChatRepository? = null
@@ -337,6 +358,67 @@ class TitanController(
         screen = Screen.Alerts
         unreadAlerts = 0
         connectionSettings.seenAlertsCount = alerts.size  // headless-delivered alerts count too
+    }
+
+    // ── Diagnostics + config console (Phase 2a) ──
+    fun goDiagnostics() { screen = Screen.Diagnostics; refreshDiagnostics() }
+    fun goConfig() { screen = Screen.Config; if (configEntries.isEmpty()) refreshConfig() }
+
+    /** Fetch every diagnostics readout in parallel-ish (sequential off-main calls on one signer).
+     *  Each is independently null-safe so a single unreachable readout doesn't blank the screen. */
+    fun refreshDiagnostics() {
+        val key = signer ?: return
+        if (diagLoading) return
+        diagLoading = true
+        scope.launch {
+            val c = client()
+            val status = withContext(Dispatchers.IO) { c.titanStatus(key) }
+            val host = withContext(Dispatchers.IO) { c.host(key) }
+            val ns = withContext(Dispatchers.IO) { c.nervousSystem(key) }
+            val metab = withContext(Dispatchers.IO) { c.metabolism(key) }
+            val backups = withContext(Dispatchers.IO) { c.backups(key) }
+            val journal = withContext(Dispatchers.IO) { c.journal(key, 80) }
+            diagStatus = status
+            diagHost = host
+            diagNs = ns
+            diagMetabolism = metab
+            diagBackups = backups
+            diagJournal = journal
+            resting = status?.let { !it.up } ?: resting
+            diagLoading = false
+        }
+    }
+
+    /** Load all config keys (value + help + editable + source file). */
+    fun refreshConfig() {
+        val key = signer ?: return
+        if (configLoading) return
+        configLoading = true
+        scope.launch {
+            val list = withContext(Dispatchers.IO) { client().config(key) }
+            if (list != null) {
+                configSections = list.sections
+                configEntries = list.entries
+            }
+            configLoading = false
+        }
+    }
+
+    /** Write a config key (server is editable-guarded). On success re-fetch so the UI reflects
+     *  the persisted value; [onResult] surfaces ok/error to the screen for a toast/inline note.
+     *  The signing inherits the Maker's configured app-lock/biometric window (every command is
+     *  Ed25519-signed + device-gated) — no separate auth path. */
+    fun saveConfig(dotted: String, value: String, onResult: (SetConfigResult) -> Unit) {
+        val key = signer ?: return
+        scope.launch {
+            val r = try {
+                withContext(Dispatchers.IO) { client().setConfig(key, dotted, value) }
+            } catch (e: Exception) {
+                SetConfigResult(ok = false, error = e.message ?: "Network error.")
+            }
+            if (r.ok) refreshConfig()
+            onResult(r)
+        }
     }
 
     /** In-app tap on a system card's action button (RFP §7.3 3a): sign + send, mark the

@@ -16,6 +16,7 @@ val TitanText = Color(0xFFE6EAF2)
 val TitanMuted = Color(0xFF8A93A6)
 val TitanGood = Color(0xFF5BD9A6)
 val TitanWarn = Color(0xFFE7B450)
+val TitanBad = Color(0xFFE0685F)
 
 private val TitanColors = darkColorScheme(
     primary = TitanCyan,

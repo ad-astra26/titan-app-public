@@ -37,6 +37,8 @@ fun HomeScreen(
     unreadAlerts: Int,
     onChat: () -> Unit,
     onAlerts: () -> Unit,
+    onDiagnostics: () -> Unit,
+    onConfig: () -> Unit,
     onSettings: () -> Unit,
     onCycleAvailability: () -> Unit,
 ) {
@@ -65,6 +67,8 @@ fun HomeScreen(
         Spacer(Modifier.size(6.dp))
         HomeTile("Chat", "Talk with Titan", onChat)
         HomeTile("Alerts & info", "Titan's messages and decisions", onAlerts, badge = unreadAlerts)
+        HomeTile("Diagnostics", "Liveness · host · subsystems · SOL · backups", onDiagnostics)
+        HomeTile("Config", "Read and edit Titan's configuration", onConfig)
         HomeTile("Settings", "Connection · availability · app lock", onSettings)
     }
 }

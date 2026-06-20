@@ -2,6 +2,13 @@ package tech.iamtitan.app.net
 
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
 import tech.iamtitan.app.chat.ChatRaw
 import tech.iamtitan.app.chat.ChatRequestBody
 import tech.iamtitan.app.chat.ChatResult
@@ -139,6 +146,84 @@ class ConsoleClient(
         return signedRequest(signer, "POST", "/console/events/respond", body).status == 200
     }
 
+    // ── Diagnostics + config (RFP_titan_mobile_app Phase 2a) — all signed reads over
+    //    existing Console routes; null on any non-200/parse failure (the UI degrades). ──
+
+    /** GET /console/host — host CPU/mem/swap/disk snapshot. */
+    suspend fun host(signer: RequestSigner): HostResources? =
+        getJson(signer, "/console/host", HostResources.serializer())
+
+    /** GET /console/titan-status — liveness (up/why-down + journal tail when down). */
+    suspend fun titanStatus(signer: RequestSigner): TitanLiveness? =
+        getJson(signer, "/console/titan-status", TitanLiveness.serializer())
+
+    /** GET /console/journal?lines=N — recent service journal. */
+    suspend fun journal(signer: RequestSigner, lines: Int = 80): JournalTail? =
+        getJson(signer, "/console/journal", JournalTail.serializer(), query = "lines=$lines")
+
+    /** GET /console/api/v6/nervous-system — module/subsystem health summary. */
+    suspend fun nervousSystem(signer: RequestSigner): NervousSystem? =
+        getJson(signer, "/console/api/v6/nervous-system", NervousSystem.serializer())
+
+    /** GET /console/config[?section=] — all config keys (value+help+editable+source). */
+    suspend fun config(signer: RequestSigner, section: String? = null): ConfigList? =
+        getJson(signer, "/console/config", ConfigList.serializer(),
+                query = section?.let { "section=$it" })
+
+    /** POST /console/config/set — write a key (server is editable-guarded; returns ok/error). */
+    suspend fun setConfig(signer: RequestSigner, key: String, value: String): SetConfigResult {
+        val body = WireJson.encodeToString(
+            SetConfigBody.serializer(), SetConfigBody(key, value),
+        ).encodeToByteArray()
+        val resp = signedRequest(signer, "POST", "/console/config/set", body)
+        return runCatching {
+            WireJson.decodeFromString(SetConfigResult.serializer(), resp.bodyText())
+        }.getOrElse { SetConfigResult(ok = false, error = "bad response (${resp.status})") }
+    }
+
+    /** GET /console/api/v6/metabolism/gate-status → SOL balance + metabolic tier. Defensively
+     *  parsed (the payload is wrapped `{status, data:{…}}`; we tolerate either nesting). */
+    suspend fun metabolism(signer: RequestSigner): MetabolismView? {
+        val obj = rawGet(signer, "/console/api/v6/metabolism/gate-status") ?: return null
+        val data = (obj["data"] as? JsonObject) ?: obj
+        return MetabolismView(
+            tier = data["current_tier"]?.strOrNull(),
+            solBalance = data["sol_balance"]?.dblOrNull(),
+        )
+    }
+
+    /** GET /console/backups → ops.list_backups (records[] + manifest). Defensively parsed (a
+     *  record's `ts`/`size_bytes` scalar type isn't pinned, so we read whatever's there). */
+    suspend fun backups(signer: RequestSigner): BackupView? {
+        val obj = rawGet(signer, "/console/backups") ?: return null
+        val records = obj["records"] as? JsonArray
+        val latest = records?.firstOrNull() as? JsonObject
+        val manifest = obj["manifest"] as? JsonObject
+        return BackupView(
+            records = records?.size ?: 0,
+            latestType = latest?.get("type")?.strOrNull(),
+            latestTs = latest?.get("ts")?.scalarOrNull(),
+            arweaveEvents = manifest?.get("events")?.intOrNull2(),
+        )
+    }
+
+    private suspend fun rawGet(signer: RequestSigner, consolePath: String): JsonObject? =
+        runCatching {
+            val resp = signedRequest(signer, "GET", consolePath, null)
+            if (resp.status != 200) null
+            else WireJson.parseToJsonElement(resp.bodyText()) as? JsonObject
+        }.getOrNull()
+
+    private suspend fun <T> getJson(
+        signer: RequestSigner,
+        path: String,
+        deserializer: kotlinx.serialization.DeserializationStrategy<T>,
+        query: String? = null,
+    ): T? = runCatching {
+        val resp = signedRequest(signer, "GET", path, null, query)
+        if (resp.status != 200) null else WireJson.decodeFromString(deserializer, resp.bodyText())
+    }.getOrNull()
+
     /**
      * Attach the AG4 signature headers and send. [body] null ⇒ no-body (GET). [query]
      * rides in the URL but is **excluded from the signature** — the canonical string
@@ -166,3 +251,11 @@ class ConsoleClient(
         return transport.send(HttpRequest(method, url, headers, body))
     }
 }
+
+// Defensive JSON-scalar readers (used by metabolism()/backups()). Each returns null for a
+// non-primitive / JsonNull / wrong-type element rather than throwing — a single odd field
+// never propagates a decode failure up to the UI.
+private fun JsonElement.strOrNull(): String? = (this as? JsonPrimitive)?.contentOrNull
+private fun JsonElement.scalarOrNull(): String? = (this as? JsonPrimitive)?.contentOrNull
+private fun JsonElement.dblOrNull(): Double? = (this as? JsonPrimitive)?.doubleOrNull
+private fun JsonElement.intOrNull2(): Int? = (this as? JsonPrimitive)?.intOrNull
