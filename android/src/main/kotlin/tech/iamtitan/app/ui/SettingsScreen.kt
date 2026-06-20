@@ -94,7 +94,8 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.titleSmall)
             Text(
                 "What you let Titan sense about your world. Each is opt-in and off by default; " +
-                    "it's collected only while on and sampled in the background about every 15 min.",
+                    "collected only while on. Updates speed up while you're on the move and ease " +
+                    "back to about every 15 min when you're still, to save battery.",
                 color = TitanMuted, style = MaterialTheme.typography.bodySmall,
             )
             Spacer(Modifier.height(4.dp))

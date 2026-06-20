@@ -24,6 +24,7 @@ import tech.iamtitan.app.data.PairingStore
 import tech.iamtitan.app.data.PresenceStore
 import tech.iamtitan.app.data.SecuritySettings
 import tech.iamtitan.app.presence.PresenceCollector
+import tech.iamtitan.app.presence.PresenceMotion
 import tech.iamtitan.app.work.PresenceWorker
 import java.util.UUID
 import tech.iamtitan.app.net.AndroidHttpTransport
@@ -315,12 +316,22 @@ class TitanController(
             // Android-12+ FGS-start rule requires). Idempotent re-foreground if already up.
             if (alwaysConnected) TitanLinkService.startPersistent(context)
         }
+        // Foreground = live app; the motion trigger is a background-only optimization.
+        PresenceMotion.cancel(context)
     }
 
     /** Activity stopped — note when, for the TIMER lock policy. */
     fun onBackground() {
         if (store.paired) lastBackgroundAt = System.currentTimeMillis()
         connection.onBackground()
+        // Adaptive presence: while backgrounded with location shared, fire an
+        // immediate upload the moment the Maker starts moving (then the worker fast-chains),
+        // instead of waiting for the next 15-min periodic. Battery-light one-shot HW sensor.
+        if (store.paired && presenceStore.locationEnabled &&
+            PresenceCollector.hasLocationPermission(context)
+        ) {
+            PresenceMotion.arm(context) { PresenceWorker.enqueueFast(context, delayMinutes = 0) }
+        }
     }
 
     // ── Event channel ──────────────────────

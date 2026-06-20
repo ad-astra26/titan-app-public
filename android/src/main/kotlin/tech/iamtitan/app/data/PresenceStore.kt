@@ -30,6 +30,16 @@ class PresenceStore(context: Context) {
         get() = prefs.getInt("cadence_minutes", 15)
         set(v) = prefs.edit().putInt("cadence_minutes", v.coerceIn(1, 1440)).apply()
 
+    // ── Adaptive cadence: fast while moving, slow while still. The worker
+    // compares each fix to the last; a move ≥ threshold drives a fast one-shot chain. ──
+    var lastLat: Float
+        get() = prefs.getFloat("last_lat", Float.NaN)
+        set(v) = prefs.edit().putFloat("last_lat", v).apply()
+
+    var lastLon: Float
+        get() = prefs.getFloat("last_lon", Float.NaN)
+        set(v) = prefs.edit().putFloat("last_lon", v).apply()
+
     /** Any sensor opted in ⇒ the background sampler should run. */
     val anyEnabled: Boolean get() = locationEnabled || timeEnabled || batteryEnabled
 
