@@ -41,6 +41,8 @@ fun HomeScreen(
     onConfig: () -> Unit,
     onSettings: () -> Unit,
     onCycleAvailability: () -> Unit,
+    advancedEnabled: Boolean = false,
+    onAdvanced: () -> Unit = {},
 ) {
     Column(
         modifier = Modifier.fillMaxSize().background(TitanInk).systemBarsPadding().padding(20.dp),
@@ -69,6 +71,9 @@ fun HomeScreen(
         HomeTile("Alerts & info", "Titan's messages and decisions", onAlerts, badge = unreadAlerts)
         HomeTile("Diagnostics", "Liveness · host · subsystems · SOL · backups", onDiagnostics)
         HomeTile("Config", "Read and edit Titan's configuration", onConfig)
+        if (advancedEnabled) {
+            HomeTile("Advanced ops", "Per-layer restart · reboot · cleanup", onAdvanced)
+        }
         HomeTile("Settings", "Connection · availability · app lock", onSettings)
     }
 }

@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.fragment.app.FragmentActivity
 import com.google.zxing.integration.android.IntentIntegrator
 import tech.iamtitan.app.notify.Notifier
+import tech.iamtitan.app.ui.AdvancedOpsScreen
 import tech.iamtitan.app.ui.AlertsScreen
 import tech.iamtitan.app.ui.ChatScreen
 import tech.iamtitan.app.ui.ConfigScreen
@@ -200,6 +201,8 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
             onConfig = controller::goConfig,
             onSettings = controller::openSettings,
             onCycleAvailability = controller::cycleAvailability,
+            advancedEnabled = controller.advancedOpsEnabled,
+            onAdvanced = controller::goAdvanced,
         )
         Screen.Chat -> ChatScreen(
             titanLabel = controller.titanLabel,
@@ -238,6 +241,22 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
             onRefresh = controller::refreshConfig,
             onSave = controller::saveConfig,
         )
+        Screen.Advanced -> AdvancedOpsScreen(
+            loading = controller.advLoading,
+            ns = controller.diagNs,
+            scan = controller.advScan,
+            agentStatus = controller.advAgentStatus,
+            banner = controller.advBanner,
+            onBack = controller::goHome,
+            onRefresh = controller::refreshAdvanced,
+            onModuleOp = controller::opModule,
+            onReloadApi = controller::opReloadApi,
+            onFullRestart = controller::opFullRestart,
+            onReboot = controller::opReboot,
+            onScanProcesses = controller::opScanProcesses,
+            onReap = controller::opReap,
+            onPrune = controller::opPrune,
+        )
     }
 
     if (showPaste) {
@@ -257,6 +276,7 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
             presenceLocation = controller.presenceLocation,
             presenceTime = controller.presenceTime,
             presenceBattery = controller.presenceBattery,
+            advancedOpsEnabled = controller.advancedOpsEnabled,
             onLockModeChange = controller::updateLockMode,
             onTimerChange = controller::updateLockTimerMinutes,
             onAlwaysConnectedChange = controller::updateAlwaysConnected,
@@ -264,6 +284,7 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
             onPresenceLocationChange = controller::togglePresenceLocation,
             onPresenceTimeChange = controller::togglePresenceTime,
             onPresenceBatteryChange = controller::togglePresenceBattery,
+            onAdvancedOpsChange = controller::updateAdvancedOpsEnabled,
             onClose = controller::closeSettings,
         )
     }
@@ -277,7 +298,8 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
     // > base screen. Home/Pairing intentionally have NO handler → the default back exits the app.
     BackHandler(
         enabled = controller.screen == Screen.Chat || controller.screen == Screen.Alerts ||
-            controller.screen == Screen.Diagnostics || controller.screen == Screen.Config,
+            controller.screen == Screen.Diagnostics || controller.screen == Screen.Config ||
+            controller.screen == Screen.Advanced,
     ) {
         controller.goHome()
     }

@@ -239,6 +239,70 @@ class ConsoleClient(
         }.getOrNull()
     }
 
+    // ── Advanced layered ops (RFP_titan_mobile_app Phase 2b §7.2b) — privileged, signed.
+    //    The Console gates each route device-side; the app additionally hides this surface
+    //    behind the advanced-mode toggle. ──
+
+    /** POST /console/ops/module/<action>/<name> — L2 worker reload|restart|enable, proxied to
+     *  the kernel admin endpoint. [action] ∈ {reload,restart,enable}; [name] is a live module. */
+    suspend fun moduleOp(signer: RequestSigner, action: String, name: String): OpsResult =
+        postOps(signer, "/console/ops/module/$action/$name", null)
+
+    /** POST /console/ops/reload-api — L3 zero-downtime api-layer reload (kernel /v6/admin/reload-api). */
+    suspend fun reloadApi(signer: RequestSigner): OpsResult =
+        postOps(signer, "/console/ops/reload-api", null)
+
+    /** POST /console/ops/reboot — host VPS reboot. Requires a primary device (server-checked,
+     *  403 otherwise) + the typed [confirmPhrase] ("REBOOT"). */
+    suspend fun reboot(signer: RequestSigner, confirmPhrase: String): RebootResult {
+        val body = WireJson.encodeToString(RebootBody.serializer(), RebootBody(confirmPhrase))
+            .encodeToByteArray()
+        val resp = signedRequest(signer, "POST", "/console/ops/reboot", body)
+        if (resp.status == 403) return RebootResult(ok = false, error = "This device isn't authorized to reboot.")
+        return runCatching {
+            WireJson.decodeFromString(RebootResult.serializer(), resp.bodyText())
+        }.getOrElse { RebootResult(ok = false, error = "Unexpected reply (${resp.status}).") }
+    }
+
+    /** GET /console/ops/processes — dry-run process scan (orphan-helper reapables). */
+    suspend fun scanProcesses(signer: RequestSigner): ProcessScan? =
+        getJson(signer, "/console/ops/processes", ProcessScan.serializer())
+
+    /** POST /console/ops/processes/reap — kill specific allow-listed orphan PIDs (re-checked
+     *  server-side at kill time). [pids] are confirmed from a prior [scanProcesses]. */
+    suspend fun reapProcesses(signer: RequestSigner, pids: List<Int>): ReapResult? {
+        val body = WireJson.encodeToString(ReapBody.serializer(), ReapBody(pids)).encodeToByteArray()
+        val resp = signedRequest(signer, "POST", "/console/ops/processes/reap", body)
+        if (resp.status != 200) return null
+        return runCatching {
+            WireJson.decodeFromString(ReapResult.serializer(), resp.bodyText())
+        }.getOrNull()
+    }
+
+    /** POST /console/ops/prune-arweave-devnet — keep-newest-N of the devnet Arweave cache. */
+    suspend fun pruneArweaveDevnet(signer: RequestSigner, keep: Int, confirm: Boolean): PruneResult? {
+        val body = WireJson.encodeToString(PruneBody.serializer(), PruneBody(keep, confirm)).encodeToByteArray()
+        val resp = signedRequest(signer, "POST", "/console/ops/prune-arweave-devnet", body)
+        if (resp.status != 200) return null
+        return runCatching {
+            WireJson.decodeFromString(PruneResult.serializer(), resp.bodyText())
+        }.getOrNull()
+    }
+
+    /** GET /console/agent-status — console self-status (uptime/version/Titan-reachable). The app
+     *  polls this to detect the console coming back after a VPS reboot. */
+    suspend fun agentStatus(signer: RequestSigner): AgentStatus? =
+        getJson(signer, "/console/agent-status", AgentStatus.serializer())
+
+    private suspend fun postOps(signer: RequestSigner, path: String, body: ByteArray?): OpsResult {
+        val resp = signedRequest(signer, "POST", path, body ?: "{}".encodeToByteArray())
+        if (resp.status == 401 || resp.status == 403)
+            return OpsResult(error = "Not authorized for this op (${resp.status}).")
+        return runCatching {
+            WireJson.decodeFromString(OpsResult.serializer(), resp.bodyText())
+        }.getOrElse { OpsResult(error = "Unexpected reply (${resp.status}).") }
+    }
+
     private suspend fun rawGet(signer: RequestSigner, consolePath: String): JsonObject? =
         runCatching {
             val resp = signedRequest(signer, "GET", consolePath, null)

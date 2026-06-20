@@ -118,4 +118,70 @@ class ConsoleClientTest {
         val unauth = FakeTransport(HttpResponse(401, """{"error":"unknown device"}""".encodeToByteArray()))
         assertNull(ConsoleClient("http://x", unauth).whoAmI(signer))
     }
+
+    // ── Phase 2b advanced ops (RFP §7.2b) ──
+
+    @Test
+    fun moduleOp_signs_canonically_and_reads_ok() = runBlocking {
+        val fake = FakeTransport(HttpResponse(200, """{"status":"ok","data":"x"}""".encodeToByteArray()))
+        val r = ConsoleClient("http://x", fake).moduleOp(signer, "restart", "cognitive_worker")
+        assertTrue(r.succeeded)
+        val req = assertNotNull(fake.last)
+        assertEquals("POST", req.method)
+        assertEquals("http://x/console/ops/module/restart/cognitive_worker", req.url)
+        // Prove the server would ACCEPT the signature over the bare path.
+        val ts = req.headers["X-Timestamp"]!!
+        val canonical = canonicalRequest("POST", "/console/ops/module/restart/cognitive_worker",
+            ts, sha256(req.body!!).toHex())
+        assertTrue(Ed25519.verify(Base64.decode(req.headers["X-Signature"]!!),
+            canonical.encodeToByteArray(), signer.publicKey))
+    }
+
+    @Test
+    fun reloadApi_targets_console_route() = runBlocking {
+        val fake = FakeTransport(HttpResponse(200, """{"status":"ok","data":"abc"}""".encodeToByteArray()))
+        assertTrue(ConsoleClient("http://x", fake).reloadApi(signer).succeeded)
+        assertEquals("http://x/console/ops/reload-api", fake.last!!.url)
+    }
+
+    @Test
+    fun reboot_sends_confirm_phrase_and_maps_403() = runBlocking {
+        val ok = FakeTransport(HttpResponse(200, """{"ok":true,"rebooting":true}""".encodeToByteArray()))
+        val r = ConsoleClient("http://x", ok).reboot(signer, "REBOOT")
+        assertTrue(r.ok && r.rebooting)
+        assertEquals("http://x/console/ops/reboot", ok.last!!.url)
+        assertTrue(ok.last!!.body!!.decodeToString().contains("REBOOT"))
+
+        val denied = FakeTransport(HttpResponse(403, """{"error":"reboot requires a primary paired device"}""".encodeToByteArray()))
+        assertTrue(ConsoleClient("http://x", denied).reboot(signer, "REBOOT").error != null)
+    }
+
+    @Test
+    fun scanProcesses_parses_classification() = runBlocking {
+        val fake = FakeTransport(HttpResponse(200,
+            """{"dry_run":true,"count":1,"reapable":[90001],"zombies":[],"processes":[{"pid":90001,"comm":"chromium","classification":"orphan_helper","reapable":true}]}""".encodeToByteArray()))
+        val scan = assertNotNull(ConsoleClient("http://x", fake).scanProcesses(signer))
+        assertEquals(listOf(90001), scan.reapable)
+        assertEquals("orphan_helper", scan.processes.first().classification)
+        assertEquals("GET", fake.last!!.method)
+    }
+
+    @Test
+    fun reapProcesses_sends_pids_body() = runBlocking {
+        val fake = FakeTransport(HttpResponse(200,
+            """{"requested":1,"killed":1,"results":[{"pid":90001,"killed":true,"comm":"chromium"}]}""".encodeToByteArray()))
+        val r = assertNotNull(ConsoleClient("http://x", fake).reapProcesses(signer, listOf(90001)))
+        assertEquals(1, r.killed)
+        assertEquals("http://x/console/ops/processes/reap", fake.last!!.url)
+        assertTrue(fake.last!!.body!!.decodeToString().contains("90001"))
+    }
+
+    @Test
+    fun agentStatus_reads_reachable() = runBlocking {
+        val fake = FakeTransport(HttpResponse(200,
+            """{"agent":"titan-console","version":"0.1.0-alpha","titan_reachable":true,"uptime_seconds":12.5}""".encodeToByteArray()))
+        val s = assertNotNull(ConsoleClient("http://x", fake).agentStatus(signer))
+        assertTrue(s.titanReachable)
+        assertEquals("titan-console", s.agent)
+    }
 }

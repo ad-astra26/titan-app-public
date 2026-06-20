@@ -37,6 +37,8 @@ import tech.iamtitan.app.net.JournalTail
 import tech.iamtitan.app.net.MetabolismView
 import tech.iamtitan.app.net.NervousSystem
 import tech.iamtitan.app.net.SetConfigResult
+import tech.iamtitan.app.net.AgentStatus
+import tech.iamtitan.app.net.ProcessScan
 import tech.iamtitan.app.net.TitanLiveness
 import tech.iamtitan.app.notify.Notifier
 import tech.iamtitan.app.service.TitanLinkService
@@ -47,7 +49,7 @@ import tech.iamtitan.app.ui.PairingUiState
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
-enum class Screen { Pairing, Home, Chat, Alerts, Diagnostics, Config }
+enum class Screen { Pairing, Home, Chat, Alerts, Diagnostics, Config, Advanced }
 
 /**
  * Drives the M1 "Hello Titan" slice: QR → keygen (sealed) → submit → code-match
@@ -111,6 +113,14 @@ class TitanController(
     var configLoading by mutableStateOf(false); private set
     var configSections by mutableStateOf<List<String>>(emptyList()); private set
     var configEntries by mutableStateOf<List<ConfigEntry>>(emptyList()); private set
+
+    // ── Phase 2b: advanced layered ops (§7.2b). Gated by [advancedOpsEnabled] (app-lock-gated
+    //    toggle, OFF by default); the privileged Console routes are independently device-authed. ──
+    var advancedOpsEnabled by mutableStateOf(security.advancedOpsEnabled); private set
+    var advLoading by mutableStateOf(false); private set
+    var advScan by mutableStateOf<ProcessScan?>(null); private set
+    var advAgentStatus by mutableStateOf<AgentStatus?>(null); private set
+    var advBanner by mutableStateOf<String?>(null); private set
 
     // ── Phase 3: presence opt-in (AG6). Per-sensor toggles → console-local store + signed
     //    backend settings + the background sampler. All default OFF. ──
@@ -430,6 +440,141 @@ class TitanController(
             }
             if (r.ok) refreshConfig()
             onResult(r)
+        }
+    }
+
+    // ── Phase 2b: advanced layered ops (§7.2b) — privileged, signed; gated by advancedOpsEnabled ──
+    fun goAdvanced() {
+        if (!advancedOpsEnabled) return
+        screen = Screen.Advanced
+        advBanner = null
+        refreshAdvanced()
+    }
+
+    /** Pull the module roster (for the L2 tree) + console self-status. */
+    fun refreshAdvanced() {
+        val key = signer ?: return
+        if (advLoading) return
+        advLoading = true
+        scope.launch {
+            val c = client()
+            val ns = withContext(Dispatchers.IO) { c.nervousSystem(key) }
+            val st = withContext(Dispatchers.IO) { c.agentStatus(key) }
+            if (ns != null) diagNs = ns
+            advAgentStatus = st
+            advLoading = false
+        }
+    }
+
+    /** Flip the advanced-mode gate (§7.2b decision-c). Enabling requires an app-lock re-auth
+     *  (DeviceKey.unlock); disabling is immediate. Persisted in SecuritySettings. */
+    fun updateAdvancedOpsEnabled(on: Boolean) {
+        if (!on) {
+            advancedOpsEnabled = false
+            security.advancedOpsEnabled = false
+            if (screen == Screen.Advanced) screen = Screen.Home
+            return
+        }
+        val key = signer ?: return
+        scope.launch {
+            if (key.unlock()) {
+                advancedOpsEnabled = true
+                security.advancedOpsEnabled = true
+            }
+        }
+    }
+
+    /** L2 worker op (reload | restart | enable) → kernel admin via the Console proxy. */
+    fun opModule(action: String, name: String) {
+        val key = signer ?: return
+        advBanner = "$action $name…"
+        scope.launch {
+            val r = try { withContext(Dispatchers.IO) { client().moduleOp(key, action, name) } }
+                catch (_: Exception) { null }
+            advBanner = when {
+                r == null -> "⚠ $action $name: network error"
+                r.succeeded -> "✓ $action $name"
+                else -> "⚠ $action $name: ${r.message}"
+            }
+            if (r?.succeeded == true) refreshAdvanced()
+        }
+    }
+
+    /** L3 zero-downtime api-layer reload. */
+    fun opReloadApi() {
+        val key = signer ?: return
+        advBanner = "Reloading API…"
+        scope.launch {
+            val r = try { withContext(Dispatchers.IO) { client().reloadApi(key) } } catch (_: Exception) { null }
+            advBanner = when {
+                r == null -> "⚠ reload-api: network error"
+                r.succeeded -> "✓ API reloaded"
+                else -> "⚠ reload-api: ${r.message}"
+            }
+        }
+    }
+
+    /** L0/L1 fallback — the existing signed full restart (dreaming-aware server-side). */
+    fun opFullRestart() {
+        val key = signer ?: return
+        advBanner = "Restarting Titan…"
+        scope.launch {
+            val ok = try { withContext(Dispatchers.IO) { client().restart(key) } } catch (_: Exception) { false }
+            advBanner = if (ok) "✓ Titan restart requested" else "⚠ couldn't reach the Console to restart"
+            if (ok) resting = false
+        }
+    }
+
+    /** Host VPS reboot — primary device + typed phrase (server-enforced). */
+    fun opReboot(phrase: String) {
+        val key = signer ?: return
+        advBanner = "Rebooting VPS…"
+        scope.launch {
+            val r = try { withContext(Dispatchers.IO) { client().reboot(key, phrase) } } catch (_: Exception) { null }
+            advBanner = when {
+                r == null -> "⚠ reboot: network error"
+                r.rebooting -> "✓ VPS rebooting — reconnecting…"
+                else -> "⚠ reboot: ${r.error ?: "refused"}"
+            }
+        }
+    }
+
+    /** Dry-run scan for orphaned helper processes (allow-listed, fail-closed server-side). */
+    fun opScanProcesses() {
+        val key = signer ?: return
+        advBanner = "Scanning…"
+        scope.launch {
+            val scan = try { withContext(Dispatchers.IO) { client().scanProcesses(key) } } catch (_: Exception) { null }
+            advScan = scan
+            advBanner = if (scan == null) "⚠ scan failed" else "Scan: ${scan.reapable.size} reapable, ${scan.zombies.size} zombie"
+        }
+    }
+
+    /** Reap the chosen orphan PIDs (re-classified server-side at kill time). */
+    fun opReap(pids: List<Int>) {
+        val key = signer ?: return
+        advBanner = "Reaping ${pids.size}…"
+        scope.launch {
+            val r = try { withContext(Dispatchers.IO) { client().reapProcesses(key, pids) } } catch (_: Exception) { null }
+            val rescan = try { withContext(Dispatchers.IO) { client().scanProcesses(key) } } catch (_: Exception) { null }
+            if (rescan != null) advScan = rescan
+            advBanner = if (r == null) "⚠ reap failed" else "✓ reaped ${r.killed}/${r.requested}"
+        }
+    }
+
+    /** Prune the devnet Arweave cache (keep-newest-5). [confirm]=false is a dry run. */
+    fun opPrune(confirm: Boolean) {
+        val key = signer ?: return
+        advBanner = if (confirm) "Pruning…" else "Checking…"
+        scope.launch {
+            val r = try { withContext(Dispatchers.IO) { client().pruneArweaveDevnet(key, 5, confirm) } }
+                catch (_: Exception) { null }
+            advBanner = when {
+                r == null -> "⚠ prune failed"
+                !r.exists -> "No devnet cache dir."
+                confirm -> "✓ pruned ${r.removedBytes / 1_048_576}MB · kept ${r.kept}"
+                else -> "Would free ${r.reclaimableBytes / 1_048_576}MB (${r.kept} kept)"
+            }
         }
     }
 

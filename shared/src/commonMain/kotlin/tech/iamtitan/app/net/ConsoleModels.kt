@@ -138,3 +138,102 @@ data class BackupView(
     val latestTs: String? = null,
     val arweaveEvents: Int? = null,
 )
+
+// ── Phase 2b — advanced layered ops (RFP_titan_mobile_app §7.2b). Every field bound to a
+//    verified backend symbol in titan_console/{ops,agent,proxy}.py; decoding is lenient. ──
+
+/** Result of an L2/L3 admin-proxy op (module reload/restart/enable, reload-api). The kernel
+ *  returns `{status:"ok", data:…}`; proxy_admin may also surface `{error}`/`{titan_down}`. The
+ *  `data` payload is intentionally not modelled (ignored). [succeeded] is the UI's verdict. */
+@Serializable
+data class OpsResult(
+    val status: String? = null,
+    val ok: Boolean? = null,
+    val error: String? = null,
+    @SerialName("titan_down") val titanDown: Boolean = false,
+    val detail: String? = null,
+) {
+    val succeeded: Boolean get() = !titanDown && error == null && (status == "ok" || ok == true)
+    val message: String get() = error ?: detail ?: status ?: if (succeeded) "ok" else "failed"
+}
+
+/** POST /console/ops/reboot → ops.reboot. */
+@Serializable
+data class RebootResult(
+    val ok: Boolean = false,
+    val error: String? = null,
+    val rebooting: Boolean = false,
+)
+
+/** GET /console/ops/processes → ops.scan_processes (ALWAYS a dry run). */
+@Serializable
+data class ProcessScan(
+    @SerialName("dry_run") val dryRun: Boolean = true,
+    val count: Int = 0,
+    val reapable: List<Int> = emptyList(),
+    val zombies: List<Int> = emptyList(),
+    val processes: List<ProcInfo> = emptyList(),
+    val error: String? = null,
+)
+
+@Serializable
+data class ProcInfo(
+    val pid: Int = 0,
+    val ppid: Int = 0,
+    val state: String? = null,
+    val comm: String? = null,
+    val cmdline: String? = null,
+    @SerialName("rss_kb") val rssKb: Long = 0,
+    val classification: String? = null,
+    val reapable: Boolean = false,
+    val note: String? = null,
+)
+
+/** POST /console/ops/processes/reap → ops.reap_processes. */
+@Serializable
+data class ReapResult(
+    val requested: Int = 0,
+    val killed: Int = 0,
+    val results: List<ReapItem> = emptyList(),
+    val error: String? = null,
+)
+
+@Serializable
+data class ReapItem(
+    val pid: Int = 0,
+    val killed: Boolean = false,
+    val comm: String? = null,
+    val skipped: String? = null,
+)
+
+/** POST /console/ops/prune-arweave-devnet → ops.prune_arweave_devnet. */
+@Serializable
+data class PruneResult(
+    val confirm: Boolean = false,
+    val exists: Boolean = false,
+    val keep: Int = 0,
+    val kept: Int = 0,
+    @SerialName("reclaimable_bytes") val reclaimableBytes: Long = 0,
+    @SerialName("removed_bytes") val removedBytes: Long = 0,
+)
+
+/** GET /console/agent-status → ops.agent_status. */
+@Serializable
+data class AgentStatus(
+    val agent: String? = null,
+    val version: String? = null,
+    @SerialName("titan_id") val titanId: String? = null,
+    @SerialName("uptime_seconds") val uptimeSeconds: Double? = null,
+    @SerialName("bind_port") val bindPort: Int? = null,
+    @SerialName("titan_reachable") val titanReachable: Boolean = false,
+)
+
+// ── ops request bodies ──
+@Serializable
+data class ReapBody(val pids: List<Int>)
+
+@Serializable
+data class PruneBody(val keep: Int, val confirm: Boolean)
+
+@Serializable
+data class RebootBody(@SerialName("confirm_phrase") val confirmPhrase: String)

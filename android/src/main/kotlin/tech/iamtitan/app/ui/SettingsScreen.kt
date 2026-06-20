@@ -47,6 +47,7 @@ fun SettingsScreen(
     presenceLocation: Boolean,
     presenceTime: Boolean,
     presenceBattery: Boolean,
+    advancedOpsEnabled: Boolean,
     onLockModeChange: (LockMode) -> Unit,
     onTimerChange: (Int) -> Unit,
     onAlwaysConnectedChange: (Boolean) -> Unit,
@@ -54,6 +55,7 @@ fun SettingsScreen(
     onPresenceLocationChange: (Boolean) -> Unit,
     onPresenceTimeChange: (Boolean) -> Unit,
     onPresenceBatteryChange: (Boolean) -> Unit,
+    onAdvancedOpsChange: (Boolean) -> Unit,
     onClose: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize().background(TitanInk).systemBarsPadding()) {
@@ -134,6 +136,22 @@ fun SettingsScreen(
                 lockMode, onLockModeChange)
             LockOption(LockMode.OFF, "Off", "No lock screen. (Signing still verifies you about every 8 hours.)",
                 lockMode, onLockModeChange)
+            Spacer(Modifier.height(8.dp))
+            Text("Advanced", color = TitanText, fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleSmall)
+            Text(
+                "Unlocks the per-layer ops console — restart individual workers, reload the API, " +
+                    "reboot the VPS, and clean up stale processes. For advanced users; off by default. " +
+                    "Turning it on asks for your app lock.",
+                color = TitanMuted, style = MaterialTheme.typography.bodySmall,
+            )
+            Spacer(Modifier.height(4.dp))
+            ToggleRow(
+                title = "Advanced ops console",
+                subtitle = "Show the Advanced ops surface on the Home screen. Every action there is confirmed.",
+                checked = advancedOpsEnabled,
+                onChange = onAdvancedOpsChange,
+            )
         }
     }
 }
