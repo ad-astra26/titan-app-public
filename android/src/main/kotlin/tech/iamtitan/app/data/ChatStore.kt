@@ -47,9 +47,9 @@ class ChatStore(context: Context) {
         fileFor(session).delete()
     }
 
-    /** Mark a system turn's chosen action (RFP §7.3 3a → the in-card "✓ Acknowledged").
-     *  Used by the headless [tech.iamtitan.app.link.ResponseReceiver] so a notification-button
-     *  tap is reflected in the transcript when the app is next opened. No-op if absent. */
+    /** Mark a system turn's chosen action ( 3a → the in-card "✓ Acknowledged").
+     * Used by the headless [tech.iamtitan.app.link.ResponseReceiver] so a notification-button
+     * tap is reflected in the transcript when the app is next opened. No-op if absent. */
     fun markResponded(session: String, turnId: String, actionId: String) {
         val turns = load(session)
         val i = turns.indexOfFirst { it.id == turnId }

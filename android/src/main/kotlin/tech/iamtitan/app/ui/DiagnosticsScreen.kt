@@ -31,9 +31,9 @@ import tech.iamtitan.app.net.NervousSystem
 import tech.iamtitan.app.net.TitanLiveness
 
 /**
- * Phase 2a — read-only diagnostics console. Renders the signed Console readouts the
+ * read-only diagnostics console. Renders the signed Console readouts the
  * controller fetched (status / host / subsystem health / metabolism-SOL / backups / journal).
- * Monitor-only per the RFP §3 scope-fence; the advanced per-layer ops live in Phase 2b.
+ * Monitor-only per the scope-fence; the advanced per-layer ops live in.
  */
 @Composable
 fun DiagnosticsScreen(
@@ -52,7 +52,7 @@ fun DiagnosticsScreen(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            PillButton("‹ Home", onBack)
+            PillButton("‹ Back", onBack)
             Spacer(Modifier.width(12.dp))
             Text("Diagnostics", color = TitanText, fontWeight = FontWeight.SemiBold,
                 style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))

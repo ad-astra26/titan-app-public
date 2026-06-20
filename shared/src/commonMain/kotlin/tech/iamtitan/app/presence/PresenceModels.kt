@@ -4,10 +4,10 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Phone → Titan context uplink (RFP_titan_mobile_app Phase 3 / AG6 INV-OPT-IN). A sample
+ * Phone → Titan context uplink ( / ). A sample
  * carries only the fields the Maker has opted into + a timestamp; nullable fields are omitted
  * on the wire (WireJson `explicitNulls=false`), and the backend additionally field-gates by
- * its own opt-in store, so an un-opted-in sensor is doubly fenced. No cognition (AG8).
+ * its own opt-in store, so an un-opted-in sensor is doubly fenced. No cognition.
  */
 @Serializable
 data class PresenceSample(

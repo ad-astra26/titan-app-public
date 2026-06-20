@@ -36,7 +36,7 @@ import tech.iamtitan.app.net.NervousSystem
 import tech.iamtitan.app.net.ProcessScan
 
 /**
- * Phase 2b — advanced layered ops console (RFP_titan_mobile_app §7.2b). Reached only when the
+ * advanced layered ops console. Reached only when the
  * advanced-mode toggle is on (Settings, app-lock-gated). Honest capability matrix: L2 workers
  * reload/restart/enable; L3 api zero-downtime reload; L0/L1 collapse to a full restart (no fake
  * granularity); host VPS reboot (primary device + typed phrase); zombie/stale reap (allow-listed,
@@ -69,7 +69,7 @@ fun AdvancedOpsScreen(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            OpsPill("‹ Home", onBack)
+            OpsPill("‹ Back", onBack)
             Spacer(Modifier.width(12.dp))
             Text("Advanced ops", color = TitanText, fontWeight = FontWeight.SemiBold,
                 style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))

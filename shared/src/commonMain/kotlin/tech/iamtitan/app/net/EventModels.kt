@@ -11,7 +11,7 @@ import kotlinx.serialization.json.contentOrNull
 
 /**
  * One event drained from the Console Agent's per-device queue
- * (RFP_titan_app_event_channel §1.2). [payload] is type-dependent JSON
+ *. [payload] is type-dependent JSON
  * (`{text}` for a message, `{up, why, text}` for a health event), kept as a raw
  * [JsonElement] so the wire stays forward-compatible — unknown types are ignored,
  * never crash. Field accessors are null-safe over a malformed payload.
@@ -37,11 +37,11 @@ data class ConsoleEvent(
     /** A `health` event's up/down flag (default true if absent). */
     fun healthUp(): Boolean = prim("up")?.booleanOrNull ?: true
 
-    /** Text of a `system` event (RFP §7.3 3a), or null. */
+    /** Text of a `system` event ( 3a), or null. */
     fun systemText(): String? = prim("text")?.contentOrNull
 
-    /** Actionable buttons of a `system` event (RFP §7.3 3a). Empty if none/malformed —
-     *  forward-compatible (an action missing an id/label is skipped, never crashes). */
+    /** Actionable buttons of a `system` event ( 3a). Empty if none/malformed —
+     * forward-compatible (an action missing an id/label is skipped, never crashes). */
     fun systemActions(): List<EventAction> {
         val arr = (payload as? JsonObject)?.get("actions") as? JsonArray ?: return emptyList()
         return arr.mapNotNull { el ->
@@ -54,8 +54,8 @@ data class ConsoleEvent(
     }
 }
 
-/** One Channel-2 action affordance (RFP §7.3 3a). [needsApp] high-stakes actions open the
- *  app to complete; low-stakes ones are signed + POSTed headlessly by the ResponseReceiver. */
+/** One Channel-2 action affordance ( 3a). [needsApp] high-stakes actions open the
+ * app to complete; low-stakes ones are signed + POSTed headlessly by the ResponseReceiver. */
 data class EventAction(val id: String, val label: String, val needsApp: Boolean = false)
 
 /** The `GET /console/events` drain response: pending events + the new cursor. */
@@ -66,9 +66,9 @@ data class EventsResponse(
 )
 
 /** `POST /console/app/heartbeat` body — presence (+ the cursor the phone has consumed).
- *  [availability] is the Maker's declared status (RFP §7.3 3b: available/busy/dnd) — a
- *  transport signal Titan *reasons* about (missions P4), never a coded mute. Omitted (null)
- *  ⇒ the server keeps the default "available". */
+ * [availability] is the Maker's declared status ( 3b: available/busy/dnd) — a
+ * transport signal Titan *reasons* about (missions P4), never a coded mute. Omitted (null)
+ * ⇒ the server keeps the default "available". */
 @Serializable
 data class HeartbeatBody(
     val state: String,
@@ -79,8 +79,8 @@ data class HeartbeatBody(
 )
 
 /** `POST /console/events/respond` body — a Channel-2 action tap or a feedback chip
- *  (RFP §7.3). [kind] = "action" (with [actionId]) or "feedback" (with [reaction]/[stars]).
- *  [inReplyTo] is the originating event's seq. */
+ *. [kind] = "action" (with [actionId]) or "feedback" (with [reaction]/[stars]).
+ * [inReplyTo] is the originating event's seq. */
 @Serializable
 data class RespondBody(
     @SerialName("in_reply_to") val inReplyTo: Int? = null,

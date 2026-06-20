@@ -29,7 +29,7 @@ import androidx.compose.ui.unit.dp
 import tech.iamtitan.app.chat.ChatTurn
 
 /**
- * The Channel-2 (Alerts & Info) timeline (RFP §7.3 / INV-MIS-TWO-CHANNELS) — Titan's
+ * The Channel-2 (Alerts & Info) timeline ( / ) — Titan's
  * system decisions (actionable cards + acknowledgment), health, and ops alerts, kept
  * SEPARATE from the conversational chat. Auto-scrolls to the latest on open.
  */

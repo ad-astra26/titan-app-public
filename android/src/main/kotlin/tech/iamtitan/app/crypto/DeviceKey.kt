@@ -31,7 +31,7 @@ import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
 /**
- * AG3 — the device identity: a software Ed25519 keypair whose 32-byte seed is
+ * the device identity: a software Ed25519 keypair whose 32-byte seed is
  * **sealed at rest** by an AndroidKeyStore AES-GCM key requiring user auth, and
  * unwrapped only transiently to sign. The seed never persists in the clear and
  * never leaves the device. AndroidKeyStore can't hold an Ed25519 key portably
@@ -112,7 +112,7 @@ class DeviceKey private constructor(
     }
 
     /** Decrypt the seed with the time-bound v2 key; if the window lapsed, prompt once
-     *  (no CryptoObject) to reopen it, then retry. */
+     * (no CryptoObject) to reopen it, then retry. */
     private suspend fun unsealWindowed(ciphertext: ByteArray, iv: ByteArray): ByteArray {
         fun decrypt(): ByteArray =
             Cipher.getInstance(TRANSFORM).apply {
@@ -127,8 +127,8 @@ class DeviceKey private constructor(
     }
 
     /** Re-seal the (already-unsealed) seed under the time-bound v2 key. SAFE-DEGRADE:
-     *  the store is rewritten only on full success; any failure leaves the legacy v1
-     *  key + sealed seed intact. Never bricks. */
+     * the store is rewritten only on full success; any failure leaves the legacy v1
+     * key + sealed seed intact. Never bricks. */
     private suspend fun tryMigrateToWindowed(seed: ByteArray) {
         if (store.sealedSeedWindowed) return
         try {
@@ -142,7 +142,7 @@ class DeviceKey private constructor(
     }
 
     /** Encrypt under a time-bound key: on a lapsed window prompt once, then retry.
-     *  Returns (ciphertext, iv). */
+     * Returns (ciphertext, iv). */
     private suspend fun encryptWithWindow(
         key: SecretKey,
         plaintext: ByteArray,
@@ -161,7 +161,7 @@ class DeviceKey private constructor(
     }
 
     /** Run BiometricPrompt over [cipher] and return the authenticated cipher (per-op,
-     *  legacy path — CryptoObject-bound). */
+     * legacy path — CryptoObject-bound). */
     private suspend fun authenticate(cipher: Cipher, subtitle: String): Cipher =
         withContext(Dispatchers.Main) {
             suspendCancellableCoroutine { cont ->
@@ -222,7 +222,7 @@ class DeviceKey private constructor(
         private const val TRANSFORM = "AES/GCM/NoPadding"
 
         /** One unlock authorizes signing for this long (8 h). The app-lock overlay
-         *  governs the actual re-lock UX; this just avoids a prompt every chat turn. */
+         * governs the actual re-lock UX; this just avoids a prompt every chat turn. */
         private const val WINDOW_SECONDS = 8 * 60 * 60
 
         private fun authenticators(): Int =
@@ -286,7 +286,7 @@ class DeviceKey private constructor(
                     "no screen lock / biometric enrolled — set one up to secure your Titan key"
                 }
                 // DEV-ONLY: store the seed unsealed so the emulator flow works. Marked by a
-                // null IV; never reachable in release (canSecure() must be true there).
+                // null IV; never reachable in release (canSecure must be true there).
                 store.sealedSeedB64 = Base64.encode(seed)
                 store.sealedSeedIvB64 = null
                 store.sealedSeedWindowed = false
@@ -303,7 +303,7 @@ class DeviceKey private constructor(
         }
 
         /** Legacy per-op wrapping key (alias v1) — read-only path for already-paired
-         *  devices; never generated for new pairings now (those use [wrapKeyWindowed]). */
+         * devices; never generated for new pairings now (those use [wrapKeyWindowed]). */
         private fun wrapKey(context: Context): SecretKey =
             buildWrapKey(context, KEY_ALIAS, windowSeconds = 0)
 
@@ -312,7 +312,7 @@ class DeviceKey private constructor(
             buildWrapKey(context, KEY_ALIAS_V2, windowSeconds = WINDOW_SECONDS)
 
         /** The hardware-backed AES-GCM wrapping key; created once. [windowSeconds] 0 =
-         *  per-op (CryptoObject) on API 30+; >0 = time-bound auth-validity window. */
+         * per-op (CryptoObject) on API 30+; >0 = time-bound auth-validity window. */
         private fun buildWrapKey(context: Context, alias: String, windowSeconds: Int): SecretKey {
             val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
             (ks.getKey(alias, null) as? SecretKey)?.let { return it }
@@ -357,7 +357,7 @@ class DeviceKey private constructor(
             return kg.generateKey()
         }
 
-        /** Device fingerprint — a *secondary* signal only (AG3), never the identity. */
+        /** Device fingerprint — a *secondary* signal only (), never the identity. */
         @Suppress("HardwareIds")
         fun fingerprint(context: Context): String {
             val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "?"

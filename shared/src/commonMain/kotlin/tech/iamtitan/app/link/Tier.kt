@@ -1,22 +1,22 @@
 package tech.iamtitan.app.link
 
 /**
- * The event-channel connection tiers (RFP_titan_app_event_channel §7.2a). A tier is
+ * The event-channel connection tiers. A tier is
  * the strategy for draining the Console Agent's per-device queue right now:
  *
- *  - [FOREGROUND]  — an Activity is started; hold a long-poll, no foreground service
- *                    (the Activity already keeps the process un-frozen).
- *  - [ACTIVE_TASK] — a chat send is in flight while backgrounded; hold the long-poll
- *                    behind the short foreground service so the reply isn't dropped.
- *  - [GRACE]       — just-backgrounded; keep the long-poll best-effort (NO foreground
- *                    service) until [GRACE_WINDOW_MS], catching a reply that lands in
- *                    the first few minutes. The OS may freeze the cached process sooner
- *                    (GrapheneOS is aggressive) — that's accepted; WorkManager + the
- *                    opt-in ALWAYS_ON are the reliable paths.
- *  - [DEEP_BG]     — backgrounded past the grace window, not opted-in; no held loop,
- *                    WorkManager owns the ~15-min cadence.
- *  - [ALWAYS_ON]   — the opt-in persistent foreground service holds the long-poll 24/7
- *                    (wired in §7.2b; selected here only when [alwaysOn]).
+ * [FOREGROUND] — an Activity is started; hold a long-poll, no foreground service
+ * (the Activity already keeps the process un-frozen).
+ * [ACTIVE_TASK] — a chat send is in flight while backgrounded; hold the long-poll
+ * behind the short foreground service so the reply isn't dropped.
+ * [GRACE] — just-backgrounded; keep the long-poll best-effort (NO foreground
+ * service) until [GRACE_WINDOW_MS], catching a reply that lands in
+ * the first few minutes. The OS may freeze the cached process sooner
+ * (GrapheneOS is aggressive) — that's accepted; WorkManager + the
+ * opt-in ALWAYS_ON are the reliable paths.
+ * [DEEP_BG] — backgrounded past the grace window, not opted-in; no held loop,
+ * WorkManager owns the ~15-min cadence.
+ * [ALWAYS_ON] — the opt-in persistent foreground service holds the long-poll 24/7
+ * (wired in; selected here only when [alwaysOn]).
  */
 enum class Tier { FOREGROUND, ACTIVE_TASK, GRACE, DEEP_BG, ALWAYS_ON }
 

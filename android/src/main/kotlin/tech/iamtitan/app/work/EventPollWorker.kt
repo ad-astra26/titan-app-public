@@ -27,16 +27,16 @@ import java.util.concurrent.TimeUnit
  * Background drain of the Console Agent event queue when the app is deep-backgrounded
  * (no held long-poll). WorkManager fires it on the OS-blessed ~15-min floor; each run
  * does ONE instant drain (`wait=0`), renders via [EventRenderer] (notifications +
- * transcript persistence), and acks. Battery-respectful (AG-EVT-5): no standing
+ * transcript persistence), and acks. Battery-respectful: no standing
  * foreground service — just a periodic wake.
  *
- * Urgency warm-the-line (RFP §7.2b): if a drained event is `urgency=="high"` and the
+ * Urgency warm-the-line: if a drained event is `urgency=="high"` and the
  * Maker has NOT opted into always-connected, the worker promotes itself to a short
  * foreground service ([setForeground]) and holds a brief long-poll so a follow-up
  * (a Titan burst, or a fast reply) lands without waiting for the next ~15-min cycle.
  * When always-connected is ON the persistent service already holds the line, so no warm.
  *
- * Signing is best-effort: the device key's 8-hour auth window lets `sign()` succeed
+ * Signing is best-effort: the device key's 8-hour auth window lets `sign` succeed
  * headlessly while it's open; if the window has lapsed (no Activity here to prompt) this
  * run quietly no-ops and the next foreground open catches up. Never crashes the scheduler.
  */
@@ -50,7 +50,7 @@ class EventPollWorker(context: Context, params: WorkerParameters) :
         val deviceId = store.deviceId ?: return Result.success()
         val endpoint = store.endpointUrl ?: return Result.success()
         // No Activity in a Worker → the provider throws if a biometric prompt is needed
-        // (lapsed window); sign() then fails and we skip this run gracefully.
+        // (lapsed window); sign then fails and we skip this run gracefully.
         val key = DeviceKey.existing(ctx, store) { error("no activity in background") }
             ?: return Result.success()
         val client = ConsoleClient(endpoint, AndroidHttpTransport(tlsPin = store.tlsPin))
@@ -74,7 +74,7 @@ class EventPollWorker(context: Context, params: WorkerParameters) :
         }
     }
 
-    /** Hold a brief foreground long-poll after a high-urgency delivery (RFP §7.2b). */
+    /** Hold a brief foreground long-poll after a high-urgency delivery (). */
     private suspend fun warmTheLine(
         client: ConsoleClient,
         key: DeviceKey,
@@ -117,7 +117,7 @@ class EventPollWorker(context: Context, params: WorkerParameters) :
         const val WORK_NAME = "titan-event-poll"
 
         /** How long the urgency warm-the-line held poll runs (well under WorkManager's
-         *  10-min execution ceiling and the 6 h dataSync cap). */
+         * 10-min execution ceiling and the 6 h dataSync cap). */
         private const val WARM_MS = 3 * 60 * 1000L
         private const val WARM_WAIT = 25
 

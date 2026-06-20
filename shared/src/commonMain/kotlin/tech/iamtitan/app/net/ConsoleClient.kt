@@ -23,8 +23,8 @@ import tech.iamtitan.app.pairing.SubmitResponse
 import tech.iamtitan.app.pairing.WireJson
 
 /**
- * The single sanctioned client of the Console Agent (SPEC §2). It builds the
- * AG4-signed wire — `X-Device-Id` / `X-Timestamp` / `X-Signature` over
+ * The single sanctioned client of the Console Agent (SPEC). It builds the
+ * -signed wire — `X-Device-Id` / `X-Timestamp` / `X-Signature` over
  * `method\npath\nts\nsha256hex(body)` — and never invents routes.
  *
  * Pure over an injected [HttpTransport] + [RequestSigner], so the full signing
@@ -40,7 +40,7 @@ class ConsoleClient(
     private val base = baseUrl.trimEnd('/')
 
     /**
-     * Pairing bootstrap (SPEC §3 step 3) — POST /console/pair/submit. UNSIGNED on
+     * Pairing bootstrap (SPEC step 3) — POST /console/pair/submit. UNSIGNED on
      * purpose: this is the pre-identity handshake, gated server-side by the
      * single-use pairing token (`pairing.submit_device`), not the device key.
      */
@@ -60,7 +60,7 @@ class ConsoleClient(
     }
 
     /**
-     * Signed self-check (SPEC §3 step 5) — GET /console/device/me. Returns this
+     * Signed self-check (SPEC step 5) — GET /console/device/me. Returns this
      * device's registration once the operator has confirmed the code-match, else
      * null (401 until registered). The app polls this to know pairing completed.
      */
@@ -73,9 +73,9 @@ class ConsoleClient(
     }
 
     /**
-     * Signed owner chat (SPEC §1.2b) — POST /console/chat → proxied to the kernel
+     * Signed owner chat (SPEC) — POST /console/chat → proxied to the kernel
      * `/v6/pitch/chat` owner-bypass. Degrades to [ChatResult.TitanResting] when the
-     * kernel is down (AG2).
+     * kernel is down.
      */
     suspend fun chat(signer: RequestSigner, message: String, session: String?): ChatResult {
         val body = WireJson.encodeToString(
@@ -96,7 +96,7 @@ class ConsoleClient(
     }
 
     /**
-     * Drain this device's outbound event queue (RFP event-channel §1.2) — a signed
+     * Drain this device's outbound event queue ( event-channel) — a signed
      * long-poll. [wait] holds the connection server-side (0 = instant drain, what the
      * WorkManager job uses); [since] is the last cursor the phone consumed. A non-200
      * (401 / Titan-down) yields an empty response so the caller simply retries.
@@ -110,7 +110,7 @@ class ConsoleClient(
     }
 
     /**
-     * Report presence + ack consumed events (RFP event-channel §1.2). [ackCursor]
+     * Report presence + ack consumed events ( event-channel). [ackCursor]
      * prunes everything delivered up to it. Best-effort: returns true on 200.
      */
     suspend fun heartbeat(
@@ -133,7 +133,7 @@ class ConsoleClient(
         signedRequest(signer, "POST", "/console/restart", "{}".encodeToByteArray()).status == 200
 
     /**
-     * Send a Channel-2 action tap or a feedback chip back to Titan (RFP §7.3) — a signed
+     * Send a Channel-2 action tap or a feedback chip back to Titan — a signed
      * POST that lands durably in the Console Agent's inbox (the kernel consumes it). 200 = ok.
      */
     suspend fun respond(
@@ -150,8 +150,8 @@ class ConsoleClient(
         return signedRequest(signer, "POST", "/console/events/respond", body).status == 200
     }
 
-    // ── Diagnostics + config (RFP_titan_mobile_app Phase 2a) — all signed reads over
-    //    existing Console routes; null on any non-200/parse failure (the UI degrades). ──
+    // ── Diagnostics + config — all signed reads over
+    // existing Console routes; null on any non-200/parse failure (the UI degrades). ──
 
     /** GET /console/host — host CPU/mem/swap/disk snapshot. */
     suspend fun host(signer: RequestSigner): HostResources? =
@@ -166,8 +166,8 @@ class ConsoleClient(
         getJson(signer, "/console/journal", JournalTail.serializer(), query = "lines=$lines")
 
     /** GET /console/api/v6/readiness — kernel WORKER-module roster (module_count / modules
-     *  [name,state,pid] / module_state_summary). NOT /v6/nervous-system: that returns the 11
-     *  cognitive AXES (REFLEX/FOCUS/…), not the workers (verified live 2026-06-20). */
+     * [name,state,pid] / module_state_summary). NOT /v6/nervous-system: that returns the 11
+     * cognitive AXES (REFLEX/FOCUS/…), not the workers (verified live 2026-06-20). */
     suspend fun nervousSystem(signer: RequestSigner): NervousSystem? =
         getJson(signer, "/console/api/v6/readiness", NervousSystem.serializer())
 
@@ -188,7 +188,7 @@ class ConsoleClient(
     }
 
     /** GET /console/api/v6/metabolism/gate-status → SOL balance + metabolic tier. Defensively
-     *  parsed (the payload is wrapped `{status, data:{…}}`; we tolerate either nesting). */
+     * parsed (the payload is wrapped `{status, data:{…}}`; we tolerate either nesting). */
     suspend fun metabolism(signer: RequestSigner): MetabolismView? {
         val obj = rawGet(signer, "/console/api/v6/metabolism/gate-status") ?: return null
         val data = (obj["data"] as? JsonObject) ?: obj
@@ -199,7 +199,7 @@ class ConsoleClient(
     }
 
     /** GET /console/backups → ops.list_backups (records[] + manifest). Defensively parsed (a
-     *  record's `ts`/`size_bytes` scalar type isn't pinned, so we read whatever's there). */
+     * record's `ts`/`size_bytes` scalar type isn't pinned, so we read whatever's there). */
     suspend fun backups(signer: RequestSigner): BackupView? {
         val obj = rawGet(signer, "/console/backups") ?: return null
         val records = obj["records"] as? JsonArray
@@ -213,7 +213,7 @@ class ConsoleClient(
         )
     }
 
-    // ── Presence / context uplink (RFP_titan_mobile_app Phase 3 / AG6) ──
+    // ── Presence / context uplink ( / ) ──
 
     /** POST /console/context — upload opt-in-gated context samples. true on 200. */
     suspend fun uploadContext(signer: RequestSigner, samples: List<PresenceSample>): Boolean {
@@ -241,12 +241,12 @@ class ConsoleClient(
         }.getOrNull()
     }
 
-    // ── Advanced layered ops (RFP_titan_mobile_app Phase 2b §7.2b) — privileged, signed.
-    //    The Console gates each route device-side; the app additionally hides this surface
-    //    behind the advanced-mode toggle. ──
+    // ── Advanced layered ops — privileged, signed.
+    // The Console gates each route device-side; the app additionally hides this surface
+    // behind the advanced-mode toggle. ──
 
     /** POST /console/ops/module/<action>/<name> — L2 worker reload|restart|enable, proxied to
-     *  the kernel admin endpoint. [action] ∈ {reload,restart,enable}; [name] is a live module. */
+     * the kernel admin endpoint. [action] ∈ {reload,restart,enable}; [name] is a live module. */
     suspend fun moduleOp(signer: RequestSigner, action: String, name: String): OpsResult =
         postOps(signer, "/console/ops/module/$action/$name", null)
 
@@ -255,7 +255,7 @@ class ConsoleClient(
         postOps(signer, "/console/ops/reload-api", null)
 
     /** POST /console/ops/reboot — host VPS reboot. Requires a primary device (server-checked,
-     *  403 otherwise) + the typed [confirmPhrase] ("REBOOT"). */
+     * 403 otherwise) + the typed [confirmPhrase] ("REBOOT"). */
     suspend fun reboot(signer: RequestSigner, confirmPhrase: String): RebootResult {
         val body = WireJson.encodeToString(RebootBody.serializer(), RebootBody(confirmPhrase))
             .encodeToByteArray()
@@ -271,7 +271,7 @@ class ConsoleClient(
         getJson(signer, "/console/ops/processes", ProcessScan.serializer())
 
     /** POST /console/ops/processes/reap — kill specific allow-listed orphan PIDs (re-checked
-     *  server-side at kill time). [pids] are confirmed from a prior [scanProcesses]. */
+     * server-side at kill time). [pids] are confirmed from a prior [scanProcesses]. */
     suspend fun reapProcesses(signer: RequestSigner, pids: List<Int>): ReapResult? {
         val body = WireJson.encodeToString(ReapBody.serializer(), ReapBody(pids)).encodeToByteArray()
         val resp = signedRequest(signer, "POST", "/console/ops/processes/reap", body)
@@ -292,7 +292,7 @@ class ConsoleClient(
     }
 
     /** GET /console/agent-status — console self-status (uptime/version/Titan-reachable). The app
-     *  polls this to detect the console coming back after a VPS reboot. */
+     * polls this to detect the console coming back after a VPS reboot. */
     suspend fun agentStatus(signer: RequestSigner): AgentStatus? =
         getJson(signer, "/console/agent-status", AgentStatus.serializer())
 
@@ -323,7 +323,7 @@ class ConsoleClient(
     }.getOrNull()
 
     /**
-     * Attach the AG4 signature headers and send. [body] null ⇒ no-body (GET). [query]
+     * Attach the signature headers and send. [body] null ⇒ no-body (GET). [query]
      * rides in the URL but is **excluded from the signature** — the canonical string
      * signs `method\npath\nts\nsha256hex(body)` (the server verifies the bare path; the
      * cursor is server-authoritative). This mirrors `verify_request_signature`.
@@ -350,7 +350,7 @@ class ConsoleClient(
     }
 }
 
-// Defensive JSON-scalar readers (used by metabolism()/backups()). Each returns null for a
+// Defensive JSON-scalar readers (used by metabolism/backups). Each returns null for a
 // non-primitive / JsonNull / wrong-type element rather than throwing — a single odd field
 // never propagates a decode failure up to the UI.
 private fun JsonElement.strOrNull(): String? = (this as? JsonPrimitive)?.contentOrNull

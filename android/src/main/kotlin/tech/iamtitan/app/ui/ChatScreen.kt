@@ -66,7 +66,7 @@ fun ChatScreen(
 ) {
     Column(modifier = modifier.fillMaxSize().background(TitanInk)) {
         ChatHeader(titanLabel, resting, onBack, onOpenSettings)
-        // Auto-scroll to the latest line on open + when a new turn lands (RFP §7.3 #1) —
+        // Auto-scroll to the latest line on open + when a new turn lands ( #1) —
         // the Maker shouldn't have to scroll down through a long history.
         val listState = rememberLazyListState()
         // Items = leading spacer + turns + optional typing + trailing spacer; scroll to the
@@ -195,7 +195,7 @@ private fun Bubble(
                 )
             }
           }
-          // A Channel-2 actionable system card (RFP §7.3 3a) shows its buttons (or the
+          // A Channel-2 actionable system card ( 3a) shows its buttons (or the
           // "✓ Acknowledged" confirmation); a regular Titan turn shows feedback chips.
           if (turn.actions.isNotEmpty()) {
               ActionRow(turn) { id, label -> onAction(seqOf(turn.id) ?: -1, id, label) }

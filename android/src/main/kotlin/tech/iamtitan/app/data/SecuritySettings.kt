@@ -37,8 +37,8 @@ class SecuritySettings(context: Context) {
         set(v) = prefs.edit().putInt("lock_timer_minutes", v.coerceIn(1, 240)).apply()
 
     /**
-     * Advanced ops surface gate (RFP_titan_mobile_app §7.2b decision-c). OFF by default;
-     * flipping it on requires an app-lock re-auth (the controller runs DeviceKey.unlock()
+     * Advanced ops surface gate ( decision-c). OFF by default;
+     * flipping it on requires an app-lock re-auth (the controller runs DeviceKey.unlock
      * before persisting true). Hides the privileged per-layer ops / reboot / reap surface.
      */
     var advancedOpsEnabled: Boolean

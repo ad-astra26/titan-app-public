@@ -36,7 +36,7 @@ import tech.iamtitan.app.net.ConfigEntry
 import tech.iamtitan.app.net.SetConfigResult
 
 /**
- * Phase 2a — config browser + editor. Lists every config key (value + help + source file),
+ * config browser + editor. Lists every config key (value + help + source file),
  * filterable by section. Editable keys (server-guarded `editable:true`) open an edit dialog;
  * the write is signed via the Maker's configured app-lock/biometric window (every command is
  * authenticated). Non-editable keys render read-only with a lock hint.
@@ -61,7 +61,7 @@ fun ConfigScreen(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ConfigPill("‹ Home", onBack)
+            ConfigPill("‹ Back", onBack)
             Spacer(Modifier.width(12.dp))
             Text("Config", color = TitanText, fontWeight = FontWeight.SemiBold,
                 style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))

@@ -17,7 +17,7 @@ import javax.net.ssl.X509TrustManager
 /**
  * JVM transport (tests + a JVM-driven local e2e). Blocking inside suspend — call on an IO context.
  *
- * TLS pinning (AG-TLS/AD-9) mirrors the Android transport: when a pin is supplied, the server is
+ * TLS pinning (/) mirrors the Android transport: when a pin is supplied, the server is
  * trusted iff `sha256(leaf-cert-DER) == pin`, and hostname identification is disabled (the pin
  * replaces it — so a self-signed cert on a bare IP is accepted, only the real Titan's).
  */
@@ -49,7 +49,7 @@ class JdkHttpTransport(
 }
 
 /** sha256 of `bytes` as lowercase hex — the cross-language pin form (== Python
- *  `hashlib.sha256(DER).hexdigest()`). */
+ * `hashlib.sha256(DER).hexdigest`). */
 internal fun jvmSha256Hex(bytes: ByteArray): String =
     MessageDigest.getInstance("SHA-256").digest(bytes)
         .joinToString("") { ((it.toInt() and 0xff) + 0x100).toString(16).substring(1) }

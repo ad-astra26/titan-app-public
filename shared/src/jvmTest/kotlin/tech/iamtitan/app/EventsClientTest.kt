@@ -19,9 +19,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * The event-channel signed wire (RFP_titan_app_event_channel Phase 1). Proves the app's
- * `events()` long-poll signs EXACTLY what `pairing.verify_request_signature` reconstructs
- * — over the **bare path** `/console/events` (the `wait`/`since` query is sent but NOT
+ * The event-channel signed wire. Proves the app's
+ * `events` long-poll signs EXACTLY what `pairing.verify_request_signature` reconstructs
+ * over the **bare path** `/console/events` (the `wait`/`since` query is sent but NOT
  * signed) — so a real Console Agent accepts it; that the drain response (incl. typed
  * payload extraction) decodes; and that `heartbeat` signs its body + carries `ack_cursor`.
  */
@@ -62,7 +62,7 @@ class EventsClientTest {
         assertEquals("GET", req.method)
         // The query rides in the URL...
         assertEquals("http://10.0.2.2:7799/console/events?wait=25&since=7", req.url)
-        // ...but the signature is over the BARE path (no query), matching the server.
+        //...but the signature is over the BARE path (no query), matching the server.
         val ts = req.headers["X-Timestamp"]!!
         val canonical = canonicalRequest("GET", "/console/events", ts, sha256(ByteArray(0)).toHex())
         val sig = Base64.decode(req.headers["X-Signature"]!!)
@@ -71,7 +71,7 @@ class EventsClientTest {
 
     @Test
     fun urgency_decodes_off_the_wire_default_normal() = runBlocking {
-        // The §7.2b warm-the-line + urgent heads-up both branch on this field, so it
+        // The warm-the-line + urgent heads-up both branch on this field, so it
         // must survive the wire: explicit "high" preserved, absent defaults to "normal".
         val body = ("""{"events":[{"seq":1,"type":"message","urgency":"high","payload":{"text":"now"}},""" +
             """{"seq":2,"type":"message","payload":{"text":"later"}}],"cursor":2}""")
@@ -110,7 +110,7 @@ class EventsClientTest {
         assertTrue(sent.contains("\"battery\":88"))
     }
 
-    // ── Phase 3 §7.3 ─────────────────────────────────────────────────────────
+    // ── ─────────────────────────────────────────────────────────
     @Test
     fun system_event_decodes_text_and_actions() = runBlocking {
         val body = ("""{"events":[{"seq":7,"type":"system","payload":{"text":"Backup failed.",""" +

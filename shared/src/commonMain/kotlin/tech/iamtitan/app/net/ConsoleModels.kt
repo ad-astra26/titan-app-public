@@ -4,14 +4,14 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Typed views of the Console Agent's diagnostics / config readouts (RFP_titan_mobile_app
- * Phase 2a). Every field name is bound to a verified backend symbol (traced in
+ * Typed views of the Console Agent's diagnostics / config readouts (
+ * ). Every field name is bound to a verified backend symbol (traced in
  * `titan_console/{host,titan_status,config_api}.py` + `titan_hcl/api/v6.py`); decoding is
  * lenient (`WireJson` has ignoreUnknownKeys) so extra/renamed server fields never crash the
  * app — they're just ignored, and absent fields fall back to the declared defaults.
  */
 
-// ── GET /console/host → read_host_resources() ──
+// ── GET /console/host → read_host_resources ──
 @Serializable
 data class HostResources(
     val cpu: HostCpu? = null,
@@ -45,7 +45,7 @@ data class HostDisk(
     val percent: Double? = null,
 )
 
-// ── GET /console/titan-status → titan_status() ──
+// ── GET /console/titan-status → titan_status ──
 @Serializable
 data class TitanLiveness(
     val titan_id: String? = null,
@@ -139,12 +139,12 @@ data class BackupView(
     val arweaveEvents: Int? = null,
 )
 
-// ── Phase 2b — advanced layered ops (RFP_titan_mobile_app §7.2b). Every field bound to a
-//    verified backend symbol in titan_console/{ops,agent,proxy}.py; decoding is lenient. ──
+// ── — advanced layered ops. Every field bound to a
+// verified backend symbol in titan_console/{ops,agent,proxy}.py; decoding is lenient. ──
 
 /** Result of an L2/L3 admin-proxy op (module reload/restart/enable, reload-api). The kernel
- *  returns `{status:"ok", data:…}`; proxy_admin may also surface `{error}`/`{titan_down}`. The
- *  `data` payload is intentionally not modelled (ignored). [succeeded] is the UI's verdict. */
+ * returns `{status:"ok", data:…}`; proxy_admin may also surface `{error}`/`{titan_down}`. The
+ * `data` payload is intentionally not modelled (ignored). [succeeded] is the UI's verdict. */
 @Serializable
 data class OpsResult(
     val status: String? = null,

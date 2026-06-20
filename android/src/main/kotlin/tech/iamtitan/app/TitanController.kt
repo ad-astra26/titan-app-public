@@ -49,7 +49,7 @@ import tech.iamtitan.app.ui.PairingUiState
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
-enum class Screen { Pairing, Home, Chat, Alerts, Diagnostics, Config, Advanced }
+enum class Screen { Pairing, Home, Chat, Alerts, ControlCenter, Diagnostics, Config, Advanced }
 
 /**
  * Drives the M1 "Hello Titan" slice: QR → keygen (sealed) → submit → code-match
@@ -69,7 +69,7 @@ class TitanController(
     private val presenceStore = PresenceStore(context)
     private val notifier = Notifier(context).apply { ensureChannels() }
     private val activityProvider = { activity }
-    // The event-channel loop + tier machine is a process singleton (RFP §7.2a) — this
+    // The event-channel loop + tier machine is a process singleton — this
     // per-Activity controller only binds a renderer and drives lifecycle into it.
     private val connection = (activity.application as TitanApp).connection
 
@@ -79,7 +79,7 @@ class TitanController(
     var screen by mutableStateOf(Screen.Pairing); private set
     var pairing by mutableStateOf<PairingUiState>(PairingUiState.NotPaired); private set
     val turns: SnapshotStateList<ChatTurn> = mutableStateListOf()
-    // Channel-2 feed (RFP §7.3 / INV-MIS-TWO-CHANNELS) — Titan's system/health/ops
+    // Channel-2 feed ( / ) — Titan's system/health/ops
     // messages live in their OWN timeline, separate from the conversational chat.
     val alerts: SnapshotStateList<ChatTurn> = mutableStateListOf()
     var unreadAlerts by mutableStateOf(0); private set
@@ -95,14 +95,14 @@ class TitanController(
     var lockTimerMinutes by mutableStateOf(security.lockTimerMinutes); private set
     private var lastBackgroundAt = 0L
 
-    // ── "Stay connected" opt-in (RFP §7.2b — persistent always-on link) ──
+    // ── "Stay connected" opt-in ( — persistent always-on link) ──
     var alwaysConnected by mutableStateOf(connectionSettings.alwaysConnected); private set
 
-    // ── Declared availability (RFP §7.3 3b — a hint Titan reasons about, not a mute) ──
+    // ── Declared availability ( 3b — a hint Titan reasons about, not a mute) ──
     var availabilityState by mutableStateOf(connectionSettings.availability); private set
 
-    // ── Phase 2a: in-app diagnostics + config console (read-only diag + config R/W). All
-    //    fetched over existing signed Console routes; null = not-yet-loaded / unreachable. ──
+    // ──: in-app diagnostics + config console (read-only diag + config R/W). All
+    // fetched over existing signed Console routes; null = not-yet-loaded / unreachable. ──
     var diagLoading by mutableStateOf(false); private set
     var diagStatus by mutableStateOf<TitanLiveness?>(null); private set
     var diagHost by mutableStateOf<HostResources?>(null); private set
@@ -114,16 +114,16 @@ class TitanController(
     var configSections by mutableStateOf<List<String>>(emptyList()); private set
     var configEntries by mutableStateOf<List<ConfigEntry>>(emptyList()); private set
 
-    // ── Phase 2b: advanced layered ops (§7.2b). Gated by [advancedOpsEnabled] (app-lock-gated
-    //    toggle, OFF by default); the privileged Console routes are independently device-authed. ──
+    // ──: advanced layered ops. Gated by [advancedOpsEnabled] (app-lock-gated
+    // toggle, OFF by default); the privileged Console routes are independently device-authed. ──
     var advancedOpsEnabled by mutableStateOf(security.advancedOpsEnabled); private set
     var advLoading by mutableStateOf(false); private set
     var advScan by mutableStateOf<ProcessScan?>(null); private set
     var advAgentStatus by mutableStateOf<AgentStatus?>(null); private set
     var advBanner by mutableStateOf<String?>(null); private set
 
-    // ── Phase 3: presence opt-in (AG6). Per-sensor toggles → console-local store + signed
-    //    backend settings + the background sampler. All default OFF. ──
+    // ──: presence opt-in. Per-sensor toggles → console-local store + signed
+    // backend settings + the background sampler. All default OFF. ──
     var presenceLocation by mutableStateOf(presenceStore.locationEnabled); private set
     var presenceTime by mutableStateOf(presenceStore.timeEnabled); private set
     var presenceBattery by mutableStateOf(presenceStore.batteryEnabled); private set
@@ -135,7 +135,7 @@ class TitanController(
     private var pendingCode6: String? = null
 
     private fun baseUrl(): String = store.endpointUrl ?: DEFAULT_DEV_ENDPOINT
-    // Pinned TLS (AG-TLS): the transport pins the QR's cert sha256 when present.
+    // Pinned TLS: the transport pins the QR's cert sha256 when present.
     private fun client() = ConsoleClient(baseUrl(), AndroidHttpTransport(tlsPin = store.tlsPin))
 
     init {
@@ -173,7 +173,7 @@ class TitanController(
             pairing = PairingUiState.Error("That QR isn’t a Titan pairing code.")
             return
         }
-        // AG-MODE/AG-TLS fail-closed: a remote QR MUST carry a TLS pin — never pair a
+        // / fail-closed: a remote QR MUST carry a TLS pin — never pair a
         // remote Titan over an unpinned (sniffable/MITM-able) channel.
         if (payload.mode == "remote" && payload.serverTlsPin.isNullOrBlank()) {
             pairing = PairingUiState.Error(
@@ -323,9 +323,9 @@ class TitanController(
         connection.onBackground()
     }
 
-    // ── Event channel (RFP_titan_app_event_channel §7.2a) ──────────────────────
+    // ── Event channel ──────────────────────
     /** Render drained events into the UI/notifications (deliver-once via the cursor +
-     *  a per-seq turn id). Unknown types are ignored (forward-compatible). */
+     * a per-seq turn id). Unknown types are ignored (forward-compatible). */
     private fun processEvents(events: List<ConsoleEvent>) {
         for (e in events) {
             when (e.type) {
@@ -356,7 +356,7 @@ class TitanController(
     }
 
     /** Append a Channel-2 item to the Alerts/Info timeline (deduped by seq), persist it, and
-     *  bump the unread badge unless the Maker is currently viewing Alerts. */
+     * bump the unread badge unless the Maker is currently viewing Alerts. */
     private fun addAlertTurn(seq: Int, text: String, actions: List<EventAction> = emptyList()) {
         val id = "evt-$seq"
         if (alerts.any { it.id == id }) return
@@ -373,7 +373,7 @@ class TitanController(
     private fun alertsSession(): String? = store.deviceId?.let { alertsSessionFor(it) }
     private fun persistAlerts() { alertsSession()?.let { chatStore.save(it, alerts.toList()) } }
 
-    // ── Home navigation (RFP §7.3 — landing view + the two channels) ──
+    // ── Home navigation ( — landing view + the two channels) ──
     fun goHome() { screen = Screen.Home }
     fun goChat() { screen = Screen.Chat }
     fun goAlerts() {
@@ -382,12 +382,15 @@ class TitanController(
         connectionSettings.seenAlertsCount = alerts.size  // headless-delivered alerts count too
     }
 
-    // ── Diagnostics + config console (Phase 2a) ──
+    // ── Titan Control Center hub (Diagnostics / Config / Advanced live under it) ──
+    fun goControlCenter() { screen = Screen.ControlCenter }
+
+    // ── Diagnostics + config console ──
     fun goDiagnostics() { screen = Screen.Diagnostics; refreshDiagnostics() }
     fun goConfig() { screen = Screen.Config; if (configEntries.isEmpty()) refreshConfig() }
 
     /** Fetch every diagnostics readout in parallel-ish (sequential off-main calls on one signer).
-     *  Each is independently null-safe so a single unreachable readout doesn't blank the screen. */
+     * Each is independently null-safe so a single unreachable readout doesn't blank the screen. */
     fun refreshDiagnostics() {
         val key = signer ?: return
         if (diagLoading) return
@@ -427,9 +430,9 @@ class TitanController(
     }
 
     /** Write a config key (server is editable-guarded). On success re-fetch so the UI reflects
-     *  the persisted value; [onResult] surfaces ok/error to the screen for a toast/inline note.
-     *  The signing inherits the Maker's configured app-lock/biometric window (every command is
-     *  Ed25519-signed + device-gated) — no separate auth path. */
+     * the persisted value; [onResult] surfaces ok/error to the screen for a toast/inline note.
+     * The signing inherits the Maker's configured app-lock/biometric window (every command is
+     * Ed25519-signed + device-gated) — no separate auth path. */
     fun saveConfig(dotted: String, value: String, onResult: (SetConfigResult) -> Unit) {
         val key = signer ?: return
         scope.launch {
@@ -443,7 +446,7 @@ class TitanController(
         }
     }
 
-    // ── Phase 2b: advanced layered ops (§7.2b) — privileged, signed; gated by advancedOpsEnabled ──
+    // ──: advanced layered ops — privileged, signed; gated by advancedOpsEnabled ──
     fun goAdvanced() {
         if (!advancedOpsEnabled) return
         screen = Screen.Advanced
@@ -466,8 +469,8 @@ class TitanController(
         }
     }
 
-    /** Flip the advanced-mode gate (§7.2b decision-c). Enabling requires an app-lock re-auth
-     *  (DeviceKey.unlock); disabling is immediate. Persisted in SecuritySettings. */
+    /** Flip the advanced-mode gate ( decision-c). Enabling requires an app-lock re-auth
+     * (DeviceKey.unlock); disabling is immediate. Persisted in SecuritySettings. */
     fun updateAdvancedOpsEnabled(on: Boolean) {
         if (!on) {
             advancedOpsEnabled = false
@@ -578,8 +581,8 @@ class TitanController(
         }
     }
 
-    /** In-app tap on a system card's action button (RFP §7.3 3a): sign + send, mark the
-     *  card "✓ Acknowledged", and clear the shade notification. */
+    /** In-app tap on a system card's action button ( 3a): sign + send, mark the
+     * card "✓ Acknowledged", and clear the shade notification. */
     fun onAction(seq: Int, actionId: String, label: String) {
         onRespondRequested(seq, actionId, label)
     }
@@ -608,9 +611,9 @@ class TitanController(
         }
     }
 
-    /** A Channel-2 action button completed via the app (RFP §7.3 — a `needs_app` action, or
-     *  a headless tap whose key-window had lapsed). Signs + posts the response; the inbox is
-     *  durable so this is best-effort. */
+    /** A Channel-2 action button completed via the app ( — a `needs_app` action, or
+     * a headless tap whose key-window had lapsed). Signs + posts the response; the inbox is
+     * durable so this is best-effort. */
     fun onRespondRequested(seq: Int, actionId: String, label: String = actionId) {
         val key = signer ?: return
         markRespondedInMemory(seq, actionId)      // optimistic card ack
@@ -625,8 +628,8 @@ class TitanController(
         }
     }
 
-    /** Send a feedback chip on a Titan turn (RFP §7.3 3b). [seq] is parsed from the turn id
-     *  ("evt-<seq>"); a turn with no seq still posts (in_reply_to=null). */
+    /** Send a feedback chip on a Titan turn ( 3b). [seq] is parsed from the turn id
+     * ("evt-<seq>"); a turn with no seq still posts (in_reply_to=null). */
     fun onFeedback(seq: Int?, reaction: String? = null, stars: Int? = null) {
         val key = signer ?: return
         scope.launch {
@@ -639,8 +642,8 @@ class TitanController(
         }
     }
 
-    /** The Maker's declared availability (RFP §7.3 3b). Persisted; ridden on the next
-     *  heartbeat by [ConnectionManager]. Triggers an immediate heartbeat so it lands now. */
+    /** The Maker's declared availability ( 3b). Persisted; ridden on the next
+     * heartbeat by [ConnectionManager]. Triggers an immediate heartbeat so it lands now. */
     fun setAvailability(value: String) {
         connectionSettings.availability = value
         availabilityState = value
@@ -663,7 +666,7 @@ class TitanController(
     }
 
     /** Re-lock on return-from-background per the policy. Cold start is handled in
-     *  init (lastBackgroundAt==0 ⇒ skip; the initial lock is already set). */
+     * init (lastBackgroundAt==0 ⇒ skip; the initial lock is already set). */
     private fun evaluateLockOnForeground() {
         if (!store.paired || lastBackgroundAt == 0L) return
         when (lockMode) {
@@ -677,7 +680,7 @@ class TitanController(
     }
 
     /** Dismiss the lock overlay via one biometric/credential auth (which also opens
-     *  the time-bound signing window, so the next chat turn doesn't re-prompt). */
+     * the time-bound signing window, so the next chat turn doesn't re-prompt). */
     fun unlock() {
         val key = signer ?: run { locked = false; return }
         scope.launch {
@@ -691,7 +694,7 @@ class TitanController(
     fun openSettings() { showSettings = true }
     fun closeSettings() { showSettings = false }
 
-    // ── Presence opt-in (Phase 3 / AG6) ──
+    // ── Presence opt-in ( / ) ──
     fun togglePresenceLocation(on: Boolean) {
         presenceStore.locationEnabled = on
         presenceLocation = on
@@ -712,7 +715,7 @@ class TitanController(
     }
 
     /** Reconcile the background sampler + push the opt-in to the backend (which gates server-side
-     *  too — defence in depth). Schedule while any sensor is on; cancel when all are off. */
+     * too — defence in depth). Schedule while any sensor is on; cancel when all are off. */
     private fun syncPresence() {
         if (presenceStore.anyEnabled) PresenceWorker.schedule(context, presenceStore.cadenceMinutes)
         else PresenceWorker.cancel(context)
@@ -734,8 +737,8 @@ class TitanController(
         security.lockTimerMinutes = minutes
     }
 
-    /** Toggle the "Stay connected" persistent link (RFP §7.2b). Started from the
-     *  foreground (Settings), satisfying the Android-12+ FGS-start rule. */
+    /** Toggle the "Stay connected" persistent link (). Started from the
+     * foreground (Settings), satisfying the Android-12+ FGS-start rule. */
     fun updateAlwaysConnected(on: Boolean) {
         alwaysConnected = on
         connectionSettings.alwaysConnected = on

@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -25,7 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 /**
- * The landing view after pairing + auth (RFP §7.3 — no chat auto-loaded). A small status
+ * The landing view after pairing + auth ( — no chat auto-loaded). A small status
  * header (Titan awake/resting + a tap-to-cycle availability chip) over three tiles: Chat
  * (Channel 1, conversation), Alerts & Info (Channel 2, with an unread badge), Settings.
  */
@@ -37,15 +39,13 @@ fun HomeScreen(
     unreadAlerts: Int,
     onChat: () -> Unit,
     onAlerts: () -> Unit,
-    onDiagnostics: () -> Unit,
-    onConfig: () -> Unit,
+    onControlCenter: () -> Unit,
     onSettings: () -> Unit,
     onCycleAvailability: () -> Unit,
-    advancedEnabled: Boolean = false,
-    onAdvanced: () -> Unit = {},
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().background(TitanInk).systemBarsPadding().padding(20.dp),
+        modifier = Modifier.fillMaxSize().background(TitanInk).systemBarsPadding()
+            .verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -69,11 +69,7 @@ fun HomeScreen(
         Spacer(Modifier.size(6.dp))
         HomeTile("Chat", "Talk with Titan", onChat)
         HomeTile("Alerts & info", "Titan's messages and decisions", onAlerts, badge = unreadAlerts)
-        HomeTile("Diagnostics", "Liveness · host · subsystems · SOL · backups", onDiagnostics)
-        HomeTile("Config", "Read and edit Titan's configuration", onConfig)
-        if (advancedEnabled) {
-            HomeTile("Advanced ops", "Per-layer restart · reboot · cleanup", onAdvanced)
-        }
+        HomeTile("Titan Control Center", "Diagnostics · config · advanced ops", onControlCenter)
         HomeTile("Settings", "Connection · availability · app lock", onSettings)
     }
 }

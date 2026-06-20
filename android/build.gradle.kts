@@ -7,7 +7,7 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
-// Release signing (secret-managed, AD-7): the keystore + its creds live OUTSIDE both repos at
+// Release signing (secret-managed, ): the keystore + its creds live OUTSIDE both repos at
 // ~/.titan/titan-app-keystore.properties (storeFile/storePassword/keyAlias/keyPassword). Absent
 // ⇒ the release build stays unsigned (debug + CI-without-secrets still work). Never committed.
 val keystorePropsFile = File(System.getProperty("user.home"), ".titan/titan-app-keystore.properties")
@@ -78,10 +78,10 @@ dependencies {
     implementation(libs.compose.material3)
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
-    // Phase 1 (all FOSS — AD-7): device key, QR pairing, async chat.
+    // (all FOSS — ): device key, QR pairing, async chat.
     implementation(libs.androidx.biometric)
     implementation(libs.zxing.android.embedded)
     implementation(libs.kotlinx.coroutines.android)
-    // Event channel (RFP event-channel Phase 1): deep-background queue drain.
+    // Event channel ( event-channel ): deep-background queue drain.
     implementation(libs.androidx.work.runtime.ktx)
 }

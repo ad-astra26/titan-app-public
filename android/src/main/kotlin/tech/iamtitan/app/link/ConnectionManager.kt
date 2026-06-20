@@ -24,9 +24,9 @@ import tech.iamtitan.app.work.EventPollWorker
 
 /**
  * Owns the event-channel drain loop and the tier state machine
- * (RFP_titan_app_event_channel §7.2a). Held as a **process singleton** on [TitanApp]
+ *. Held as a **process singleton** on [TitanApp]
  * (NOT per-Activity) so the held long-poll survives Activity recreation without
- * duplicating or orphaning — the foundation the §7.2b ALWAYS_ON tier stands on.
+ * duplicating or orphaning — the foundation the ALWAYS_ON tier stands on.
  *
  * It runs on the process-lifetime [appScope] and rebuilds its own HTTP client / signer
  * / cursor from the [PairingStore] each cycle, so it is decoupled from the per-Activity
@@ -34,9 +34,9 @@ import tech.iamtitan.app.work.EventPollWorker
  * into the live Compose transcript + notifications) and drives lifecycle transitions.
  *
  * Tier → transport:
- *  - any tier that [holdsLongPoll] runs the held 25 s long-poll on [appScope];
- *  - [Tier.DEEP_BG] cedes to [EventPollWorker] (WorkManager ~15 min).
- * Foreground-service anchoring for ACTIVE_TASK / ALWAYS_ON is wired in §7.2b; here the
+ * any tier that [holdsLongPoll] runs the held 25 s long-poll on [appScope];
+ * [Tier.DEEP_BG] cedes to [EventPollWorker] (WorkManager ~15 min).
+ * Foreground-service anchoring for ACTIVE_TASK / ALWAYS_ON is wired in; here the
  * GRACE tier is explicitly best-effort with NO foreground service.
  *
  * Confinement: every mutator and [apply] runs on the main thread (lifecycle callbacks
@@ -59,11 +59,11 @@ class ConnectionManager(
     // Tier inputs (main-thread confined).
     private var foreground = false
     private var sending = false
-    private var alwaysOn = false // §7.2b opt-in; always false in §7.2a
+    private var alwaysOn = false // opt-in; always false in
     private var backgroundedAt = 0L
 
     /** Wire the signed-key source + the live renderer. Replaces any prior binding
-     *  (a recreated Activity rebinds its fresh renderer over the running loop). */
+     * (a recreated Activity rebinds its fresh renderer over the running loop). */
     fun bind(signer: () -> DeviceKey?, render: (List<ConsoleEvent>) -> Unit) {
         signerProvider = signer
         renderer = render
@@ -87,7 +87,7 @@ class ConnectionManager(
         apply()
     }
 
-    /** §7.2b: the "Stay connected" opt-in. No-op effect in §7.2a (default false). */
+    /**: the "Stay connected" opt-in. No-op effect in (default false). */
     fun setAlwaysOn(on: Boolean) {
         alwaysOn = on
         apply()
@@ -176,8 +176,8 @@ class ConnectionManager(
         }
     }
 
-    /** Fire one immediate heartbeat (best-effort) so a just-changed availability (RFP §7.3
-     *  3b) lands now instead of on the next loop cycle. No-op if no signer is bound yet. */
+    /** Fire one immediate heartbeat (best-effort) so a just-changed availability (
+     * 3b) lands now instead of on the next loop cycle. No-op if no signer is bound yet. */
     fun nudgeHeartbeat() {
         signerProvider?.let { provider ->
             appScope.launch { provider()?.let { heartbeat(it) } }
@@ -186,7 +186,7 @@ class ConnectionManager(
 
     private suspend fun heartbeat(key: DeviceKey) {
         val state = if (foreground) "foreground" else "background"
-        // The Maker's declared availability rides every heartbeat (RFP §7.3 3b).
+        // The Maker's declared availability rides every heartbeat ( 3b).
         val availability = ConnectionSettings(context).availability
         try {
             withContext(Dispatchers.IO) {
@@ -197,8 +197,8 @@ class ConnectionManager(
     }
 
     /** Battery %, with a GrapheneOS-safe fallback: `BATTERY_PROPERTY_CAPACITY` returns
-     *  null on the Maker's Pixel 7a, so fall back to the sticky ACTION_BATTERY_CHANGED
-     *  broadcast (`level*100/scale`). Null only if neither source reports. */
+     * null on the Maker's Pixel 7a, so fall back to the sticky ACTION_BATTERY_CHANGED
+     * broadcast (`level*100/scale`). Null only if neither source reports. */
     private fun batteryPct(): Int? {
         val bm = context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager
         bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
@@ -212,7 +212,7 @@ class ConnectionManager(
     }
 
     /** Exponential backoff after consecutive drain failures, capped — prevents a tight
-     *  loop while the kernel is down or the signing window has lapsed (no Activity). */
+     * loop while the kernel is down or the signing window has lapsed (no Activity). */
     private fun backoffFor(failures: Int): Long {
         val shift = (failures - 1).coerceIn(0, 5) // cap the shift so we never overflow
         return (BACKOFF_MS shl shift).coerceAtMost(MAX_BACKOFF_MS)

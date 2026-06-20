@@ -15,10 +15,10 @@ import java.time.format.DateTimeFormatter
 /**
  * Builds one [PresenceSample] from the phone's senses, honoring BOTH the opt-in [PresenceSettings]
  * AND the OS runtime grants. **AOSP `LocationManager` only — never FusedLocationProvider** (that
- * lives in Google Play Services, which AD-7 forbids and GrapheneOS doesn't have). Location uses
+ * lives in Google Play Services, which forbids and GrapheneOS doesn't have). Location uses
  * last-known fixes across the AOSP providers (battery-light for a periodic sampler); time/battery
  * are local. Returns null when nothing is collectable this cycle (no fields → backend stores
- * nothing). No cognition — pure collection (AG8).
+ * nothing). No cognition — pure collection.
  */
 object PresenceCollector {
 

@@ -15,10 +15,10 @@ import javax.net.ssl.X509TrustManager
 
 /**
  * Android transport via `HttpURLConnection` — AOSP, zero Google-Play-Services
- * (AD-7), works on every API ≥ 26. Blocking inside suspend — the app calls it on
+ *, works on every API ≥ 26. Blocking inside suspend — the app calls it on
  * `Dispatchers.IO`.
  *
- * TLS pinning (AG-TLS/AD-9): when the scanned QR carried `server_tls_pin`, https
+ * TLS pinning (/): when the scanned QR carried `server_tls_pin`, https
  * connections trust the server iff `sha256(leaf-cert-DER) == pin`, and hostname
  * verification is replaced by the pin — so a self-signed cert on a BARE IP (no
  * domain/CA) is accepted, but ONLY the real Titan's cert is. A mismatch throws
@@ -55,7 +55,7 @@ class AndroidHttpTransport(
 }
 
 /** sha256 of `bytes` as lowercase hex — the cross-language pin form (== Python
- *  `hashlib.sha256(DER).hexdigest()`). */
+ * `hashlib.sha256(DER).hexdigest`). */
 internal fun sha256Hex(bytes: ByteArray): String =
     MessageDigest.getInstance("SHA-256").digest(bytes)
         .joinToString("") { ((it.toInt() and 0xff) + 0x100).toString(16).substring(1) }

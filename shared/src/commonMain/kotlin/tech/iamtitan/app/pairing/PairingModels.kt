@@ -5,13 +5,13 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /**
- * The QR payload minted by `pairing.mint_pairing` (SPEC §3 step 1):
+ * The QR payload minted by `pairing.mint_pairing` (SPEC step 1):
  * `{mode?, pairing_token, server_pubkey, titan_id, ttl, endpoint_url?, server_tls_pin?}`
- * — all base64 for the binary fields. Field names are snake_case to match the Python wire.
+ * all base64 for the binary fields. Field names are snake_case to match the Python wire.
  *
- * - `mode` ∈ {local, remote, install} (AD-8); absent = legacy/dev.
- * - `serverTlsPin` = sha256-hex of the agent's self-signed cert DER (AG-TLS/AD-9). When
- *   present, the transport MUST pin it; a `remote`-mode QR without a pin is rejected.
+ * `mode` ∈ {local, remote, install}; absent = legacy/dev.
+ * `serverTlsPin` = sha256-hex of the agent's self-signed cert DER (/). When
+ * present, the transport MUST pin it; a `remote`-mode QR without a pin is rejected.
  */
 @Serializable
 data class PairingPayload(
@@ -24,7 +24,7 @@ data class PairingPayload(
     @SerialName("server_tls_pin") val serverTlsPin: String? = null,
 )
 
-/** App→agent device submission (SPEC §3 step 3) — POST /console/pair/submit. */
+/** App→agent device submission (SPEC step 3) — POST /console/pair/submit. */
 @Serializable
 data class SubmitRequest(
     @SerialName("pairing_token") val pairingToken: String,

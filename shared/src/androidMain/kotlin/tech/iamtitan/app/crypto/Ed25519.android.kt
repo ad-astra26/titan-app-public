@@ -6,7 +6,7 @@ import org.bouncycastle.crypto.signers.Ed25519Signer
 
 /**
  * Android actual = BouncyCastle (identical to the JVM actual — AndroidKeyStore has
- * no portable Ed25519 < API 33, see AG3). The 32-byte seed handed in here is the
+ * no portable Ed25519 < API 33, see ). The 32-byte seed handed in here is the
  * one transiently unwrapped from the hardware-sealed store after a biometric
  * unlock; this object never persists it.
  */

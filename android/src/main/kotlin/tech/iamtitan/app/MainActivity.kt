@@ -29,6 +29,7 @@ import com.google.zxing.integration.android.IntentIntegrator
 import tech.iamtitan.app.notify.Notifier
 import tech.iamtitan.app.ui.AdvancedOpsScreen
 import tech.iamtitan.app.ui.AlertsScreen
+import tech.iamtitan.app.ui.ControlCenterScreen
 import tech.iamtitan.app.ui.ChatScreen
 import tech.iamtitan.app.ui.ConfigScreen
 import tech.iamtitan.app.ui.DiagnosticsScreen
@@ -87,7 +88,7 @@ class MainActivity : FragmentActivity() {
     }
 
     /** A notification action opens us with an extra: the health "Restart", or a Channel-2
-     *  action (RFP §7.3 — a `needs_app` action, or a headless tap whose key window lapsed). */
+     * action ( — a `needs_app` action, or a headless tap whose key window lapsed). */
     private fun handleActionIntent(intent: Intent?) {
         when (intent?.getStringExtra(Notifier.EXTRA_ACTION)) {
             Notifier.ACTION_RESTART -> controller.onRestartRequested()
@@ -101,7 +102,7 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
-        // A notification body tap routes to the right channel (RFP §7.3).
+        // A notification body tap routes to the right channel.
         when (intent?.getStringExtra(Notifier.EXTRA_NAV)) {
             Notifier.NAV_ALERTS -> controller.goAlerts()
             Notifier.NAV_CHAT -> controller.goChat()
@@ -121,8 +122,8 @@ class MainActivity : FragmentActivity() {
     }
 
     /** POST_NOTIFICATIONS is a runtime grant on API 33+. Classic API + a 16-bit
-     *  request code (the ActivityResult registry's >16-bit codes crash
-     *  FragmentActivity — same reason we use classic IntentIntegrator for the QR). */
+     * request code (the ActivityResult registry's >16-bit codes crash
+     * FragmentActivity — same reason we use classic IntentIntegrator for the QR). */
     private fun maybeRequestNotificationPermission() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
@@ -135,9 +136,9 @@ class MainActivity : FragmentActivity() {
         )
     }
 
-    /** Request foreground location for the presence opt-in (AG6). Background location +
-     *  precise/approximate are the OS's follow-up dialogs; if the Maker declines, the
-     *  collector simply omits location (the rest of presence still works). */
+    /** Request foreground location for the presence opt-in (). Background location +
+     * precise/approximate are the OS's follow-up dialogs; if the Maker declines, the
+     * collector simply omits location (the rest of presence still works). */
     private fun requestLocationPermission() {
         val needed = arrayOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -197,11 +198,15 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
             unreadAlerts = controller.unreadAlerts,
             onChat = controller::goChat,
             onAlerts = controller::goAlerts,
-            onDiagnostics = controller::goDiagnostics,
-            onConfig = controller::goConfig,
+            onControlCenter = controller::goControlCenter,
             onSettings = controller::openSettings,
             onCycleAvailability = controller::cycleAvailability,
+        )
+        Screen.ControlCenter -> ControlCenterScreen(
             advancedEnabled = controller.advancedOpsEnabled,
+            onBack = controller::goHome,
+            onDiagnostics = controller::goDiagnostics,
+            onConfig = controller::goConfig,
             onAdvanced = controller::goAdvanced,
         )
         Screen.Chat -> ChatScreen(
@@ -230,14 +235,14 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
             metabolism = controller.diagMetabolism,
             backups = controller.diagBackups,
             journal = controller.diagJournal,
-            onBack = controller::goHome,
+            onBack = controller::goControlCenter,
             onRefresh = controller::refreshDiagnostics,
         )
         Screen.Config -> ConfigScreen(
             loading = controller.configLoading,
             sections = controller.configSections,
             entries = controller.configEntries,
-            onBack = controller::goHome,
+            onBack = controller::goControlCenter,
             onRefresh = controller::refreshConfig,
             onSave = controller::saveConfig,
         )
@@ -247,7 +252,7 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
             scan = controller.advScan,
             agentStatus = controller.advAgentStatus,
             banner = controller.advBanner,
-            onBack = controller::goHome,
+            onBack = controller::goControlCenter,
             onRefresh = controller::refreshAdvanced,
             onModuleOp = controller::opModule,
             onReloadApi = controller::opReloadApi,
@@ -296,12 +301,19 @@ private fun TitanRoot(controller: TitanController, onScan: () -> Unit) {
     // composition order; the OnBackPressedDispatcher invokes the LAST-registered *enabled*
     // callback (LIFO), so writing them base → settings → lock gives precedence lock > settings
     // > base screen. Home/Pairing intentionally have NO handler → the default back exits the app.
+    // Chat / Alerts / Control Center back → Home.
     BackHandler(
         enabled = controller.screen == Screen.Chat || controller.screen == Screen.Alerts ||
-            controller.screen == Screen.Diagnostics || controller.screen == Screen.Config ||
-            controller.screen == Screen.Advanced,
+            controller.screen == Screen.ControlCenter,
     ) {
         controller.goHome()
+    }
+    // Diagnostics / Config / Advanced back → the Control Center hub (not Home).
+    BackHandler(
+        enabled = controller.screen == Screen.Diagnostics || controller.screen == Screen.Config ||
+            controller.screen == Screen.Advanced,
+    ) {
+        controller.goControlCenter()
     }
     BackHandler(enabled = controller.showSettings) {
         controller.closeSettings()

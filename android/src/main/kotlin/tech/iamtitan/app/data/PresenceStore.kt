@@ -4,10 +4,10 @@ import android.content.Context
 import tech.iamtitan.app.presence.PresenceSettings
 
 /**
- * Local cache of the per-sensor presence opt-in (RFP_titan_mobile_app Phase 3 / AG6). Mirrors
+ * Local cache of the per-sensor presence opt-in ( / ). Mirrors
  * the console-local settings (the backend is the gate of record) so the background
  * [tech.iamtitan.app.work.PresenceWorker] knows what to collect without a network round-trip
- * each cycle. All flags default OFF (INV-OPT-IN). Writing here is paired with a signed POST to
+ * each cycle. All flags default OFF. Writing here is paired with a signed POST to
  * /console/presence/settings; the two stay in lockstep.
  */
 class PresenceStore(context: Context) {

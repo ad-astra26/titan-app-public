@@ -17,12 +17,12 @@ import tech.iamtitan.app.link.ResponseReceiver
 import tech.iamtitan.app.net.EventAction
 
 /**
- * Native AOSP notifications (NotificationManager — no GMS, AD-7). Three channels:
- *  - [CHANNEL_CHAT] — "Titan replied" / Titan-initiated messages while backgrounded.
- *  - [CHANNEL_HEALTH] — "Titan is down / recovered" (RFP event-channel health events),
- *    with a Restart action that opens the app to perform the signed restart.
- *  - [CHANNEL_LINK] — the low-importance ongoing notice for `TitanReplyService`
- *    (a foreground service must show one).
+ * Native AOSP notifications (NotificationManager — no GMS, ). Three channels:
+ * [CHANNEL_CHAT] — "Titan replied" / Titan-initiated messages while backgrounded.
+ * [CHANNEL_HEALTH] — "Titan is down / recovered" ( event-channel health events),
+ * with a Restart action that opens the app to perform the signed restart.
+ * [CHANNEL_LINK] — the low-importance ongoing notice for `TitanReplyService`
+ * (a foreground service must show one).
  *
  * Posting the reply notification is permission-aware: on API 33+ POST_NOTIFICATIONS
  * is a runtime grant; if it's absent we silently skip the OS notification — the
@@ -71,8 +71,8 @@ class Notifier(private val context: Context) {
             .build()
 
     /** A time-sensitive ("urgency=high") Titan message → a heads-up on the urgent
-     *  channel, distinct from a normal reply so it stands out. Persisted to ChatStore
-     *  separately by the caller. */
+     * channel, distinct from a normal reply so it stands out. Persisted to ChatStore
+     * separately by the caller. */
     fun notifyUrgent(text: String) {
         if (!canPost()) return
         ensureChannels()
@@ -101,8 +101,8 @@ class Notifier(private val context: Context) {
         NotificationManagerCompat.from(context).notify(REPLY_NOTIF_ID, n)
     }
 
-    /** Post a Titan health notification (RFP event-channel §1.3 step 5). A "down" event
-     *  carries a Restart action that opens the app to run the signed `/console/restart`. */
+    /** Post a Titan health notification ( event-channel step 5). A "down" event
+     * carries a Restart action that opens the app to run the signed `/console/restart`. */
     fun notifyHealth(up: Boolean, text: String) {
         if (!canPost()) return
         ensureChannels()
@@ -125,10 +125,10 @@ class Notifier(private val context: Context) {
         NotificationManagerCompat.from(context).notify(HEALTH_NOTIF_ID, builder.build())
     }
 
-    /** A Channel-2 actionable system event (RFP §7.3 3a): a first-person message with one
-     *  button per [EventAction]. A `needsApp` action opens the app to complete (high-stakes,
-     *  like Restart); a low-stakes one fires [ResponseReceiver] headlessly. Tapping the body
-     *  opens the app. [seq] is the originating event seq carried back in the response. */
+    /** A Channel-2 actionable system event ( 3a): a first-person message with one
+     * button per [EventAction]. A `needsApp` action opens the app to complete (high-stakes,
+     * like Restart); a low-stakes one fires [ResponseReceiver] headlessly. Tapping the body
+     * opens the app. [seq] is the originating event seq carried back in the response. */
     fun notifySystem(text: String, actions: List<EventAction>, seq: Int) {
         if (!canPost()) return
         ensureChannels()
@@ -151,9 +151,9 @@ class Notifier(private val context: Context) {
         NotificationManagerCompat.from(context).notify(SYSTEM_NOTIF_BASE + seq, builder.build())
     }
 
-    /** Visual acknowledgment after a Channel-2 action is chosen (RFP §7.3 — the Maker asked
-     *  for confirmation the tap registered). Replaces the lingering actionable notification
-     *  with a brief "✓ Acknowledged" that auto-dismisses. */
+    /** Visual acknowledgment after a Channel-2 action is chosen ( — the Maker asked
+     * for confirmation the tap registered). Replaces the lingering actionable notification
+     * with a brief "✓ Acknowledged" that auto-dismisses. */
     fun ackSystem(seq: Int, label: String) {
         if (!canPost()) { cancelSystem(seq); return }
         ensureChannels()
@@ -172,7 +172,7 @@ class Notifier(private val context: Context) {
     }
 
     /** A high-stakes action opens the app (which signs + sends with UI feedback); a
-     *  low-stakes one broadcasts to [ResponseReceiver] for a headless signed POST. */
+     * low-stakes one broadcasts to [ResponseReceiver] for a headless signed POST. */
     private fun respondIntent(seq: Int, action: EventAction, idx: Int): PendingIntent {
         val rc = seq * 100 + idx  // unique per (event, action)
         return if (action.needsApp) {
@@ -217,8 +217,8 @@ class Notifier(private val context: Context) {
         )
     }
 
-    /** Content intent that opens the app to a destination (RFP §7.3 — "shown also in app"):
-     *  reply → Chat, system/health → the Alerts/Info timeline. */
+    /** Content intent that opens the app to a destination ( — "shown also in app"):
+     * reply → Chat, system/health → the Alerts/Info timeline. */
     private fun navIntent(dest: String): PendingIntent {
         val intent = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -230,7 +230,7 @@ class Notifier(private val context: Context) {
     }
 
     /** Opens the app carrying the restart request — the Activity has a signing window
-     *  (and can prompt if it lapsed), so the kernel restart runs with UI feedback. */
+     * (and can prompt if it lapsed), so the kernel restart runs with UI feedback. */
     private fun restartIntent(): PendingIntent {
         val intent = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -262,14 +262,14 @@ class Notifier(private val context: Context) {
         const val EXTRA_ACTION = "titan.action"
         const val ACTION_RESTART = "restart_titan"
 
-        /** A Channel-2 action tap (RFP §7.3 3a) → ResponseReceiver (headless) or MainActivity
-         *  (needs_app / lapsed-window fallback). Carries the originating event seq + action id. */
+        /** A Channel-2 action tap ( 3a) → ResponseReceiver (headless) or MainActivity
+         * (needs_app / lapsed-window fallback). Carries the originating event seq + action id. */
         const val ACTION_RESPOND = "respond_action"
         const val EXTRA_SEQ = "titan.seq"
         const val EXTRA_ACTION_ID = "titan.action_id"
         const val EXTRA_ACTION_LABEL = "titan.action_label"
 
-        /** Notification-body tap destination (RFP §7.3 — open the app to the right channel). */
+        /** Notification-body tap destination ( — open the app to the right channel). */
         const val EXTRA_NAV = "titan.nav"
         const val NAV_CHAT = "chat"
         const val NAV_ALERTS = "alerts"

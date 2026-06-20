@@ -119,7 +119,7 @@ class ConsoleClientTest {
         assertNull(ConsoleClient("http://x", unauth).whoAmI(signer))
     }
 
-    // ── Phase 2b advanced ops (RFP §7.2b) ──
+    // ── advanced ops ──
 
     @Test
     fun moduleOp_signs_canonically_and_reads_ok() = runBlocking {

@@ -10,11 +10,11 @@ import tech.iamtitan.app.net.ConsoleEvent
 import tech.iamtitan.app.notify.Notifier
 
 /**
- * Headless rendering of drained events (RFP_titan_app_event_channel §7.2b/§7.3) — the
+ * Headless rendering of drained events (/) — the
  * single code path shared by the WorkManager deep-background drain ([EventPollWorker])
  * and the no-Activity ALWAYS_ON loop ([ConnectionManager] when no renderer is bound).
  *
- * Routes by channel (INV-MIS-TWO-CHANNELS): conversational `message`/`reply` persist to the
+ * Routes by channel: conversational `message`/`reply` persist to the
  * CHAT transcript; `system` (actionable) + `health` persist to the SEPARATE Alerts/Info
  * transcript. Both deduped by seq so opening the app shows them in the right timeline. Posts
  * AOSP notifications (urgent / reply / health / actionable-system). Unknown types ignored.

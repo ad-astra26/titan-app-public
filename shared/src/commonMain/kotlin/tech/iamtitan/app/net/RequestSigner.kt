@@ -1,7 +1,7 @@
 package tech.iamtitan.app.net
 
 /**
- * The device's request-signing identity (SPEC AG3/AG4). Supplied by the platform:
+ * The device's request-signing identity (SPEC /). Supplied by the platform:
  * on Android, an implementation that unwraps the hardware-sealed Ed25519 seed
  * behind a `BiometricPrompt`, then signs; in tests, a plain in-memory seed.
  *

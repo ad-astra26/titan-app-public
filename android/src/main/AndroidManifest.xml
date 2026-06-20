@@ -17,7 +17,7 @@
     <!-- Native "Titan replied" notifications (runtime grant on API 33+). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Presence opt-in (RFP_titan_mobile_app Phase 3 / AG6) — AOSP LocationManager only, NO
+    <!-- Presence opt-in ( / ) — AOSP LocationManager only, NO
          Google Play Services. All off by default; runtime-requested only when the Maker enables
          "Share location". Background location lets the periodic sampler read a fix while away. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
@@ -62,7 +62,7 @@
             android:foregroundServiceType="dataSync"
             tools:node="merge" />
 
-        <!-- Channel-2 action-button taps (RFP §7.3 3a) → a headless signed /console/events/
+        <!-- Channel-2 action-button taps ( 3a) → a headless signed /console/events/
              respond. Not exported: only our own notification PendingIntents trigger it. -->
         <receiver
             android:name=".link.ResponseReceiver"

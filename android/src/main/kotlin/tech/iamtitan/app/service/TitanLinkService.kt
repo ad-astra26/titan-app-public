@@ -12,22 +12,22 @@ import tech.iamtitan.app.notify.Notifier
 
 /**
  * The foreground-service process anchor for the event channel
- * (RFP_titan_app_event_channel §7.2a/b). It does NO work itself — the drain loop runs
+ * (/b). It does NO work itself — the drain loop runs
  * in `TitanApp.appScope` (`ConnectionManager`); this service only keeps the process
  * foreground (un-frozen, socket alive) so the held long-poll survives. Two modes:
  *
- *  - [startShort] — `dataSync`, `START_NOT_STICKY`: the brief anchor while an in-flight
- *    chat reply is awaited (the original #1a quirk fix). Always started from the
- *    foreground (the Maker tapping Send), so the Android-12+ background-FGS-start
- *    restriction never applies. Well under the API-34 6 h/24 h `dataSync` cap.
+ * [startShort] — `dataSync`, `START_NOT_STICKY`: the brief anchor while an in-flight
+ * chat reply is awaited (the original #1a quirk fix). Always started from the
+ * foreground (the Maker tapping Send), so the Android-12+ background-FGS-start
+ * restriction never applies. Well under the API-34 6 h/24 h `dataSync` cap.
  *
- *  - [startPersistent] — `specialUse`, `START_STICKY`: the opt-in "Stay connected"
- *    24/7 anchor for the ALWAYS_ON tier. **Must be `specialUse`, not `dataSync`** —
- *    `dataSync` is force-stopped after 6 h/24 h on API 34+, which would silently drop
- *    an always-on link. titan-app is sideloaded (no Play), so the `specialUse` review
- *    gate doesn't apply. On a `START_STICKY` respawn (OS killed the process under
- *    memory pressure) it re-arms the loop via `connection.setAlwaysOn(true)` so the
- *    link self-heals headlessly.
+ * [startPersistent] — `specialUse`, `START_STICKY`: the opt-in "Stay connected"
+ * 24/7 anchor for the ALWAYS_ON tier. **Must be `specialUse`, not `dataSync`** —
+ * `dataSync` is force-stopped after 6 h/24 h on API 34+, which would silently drop
+ * an always-on link. titan-app is sideloaded (no Play), so the `specialUse` review
+ * gate doesn't apply. On a `START_STICKY` respawn (OS killed the process under
+ * memory pressure) it re-arms the loop via `connection.setAlwaysOn(true)` so the
+ * link self-heals headlessly.
  *
  * Mode invariant: SHORT and PERSISTENT never run concurrently — the callers ensure it
  * (a chat send / urgency-warm only starts SHORT when always-connected is OFF; when ON,

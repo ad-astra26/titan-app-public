@@ -14,12 +14,12 @@ class PairingStore(context: Context) {
         get() = prefs.getString("endpoint_url", null)
         set(v) = prefs.edit().putString("endpoint_url", v).apply()
 
-    /** sha256-hex pin of the agent's self-signed TLS cert (AG-TLS); null = no pinning (dev/LAN-http). */
+    /** sha256-hex pin of the agent's self-signed TLS cert (); null = no pinning (dev/LAN-http). */
     var tlsPin: String?
         get() = prefs.getString("tls_pin", null)
         set(v) = prefs.edit().putString("tls_pin", v).apply()
 
-    /** Pairing mode the QR declared (local/remote/install), for honoring AD-8. */
+    /** Pairing mode the QR declared (local/remote/install), for honoring . */
     var mode: String?
         get() = prefs.getString("mode", null)
         set(v) = prefs.edit().putString("mode", v).apply()
@@ -62,7 +62,7 @@ class PairingStore(context: Context) {
         set(v) = prefs.edit().putBoolean("sealed_seed_windowed", v).apply()
 
     /**
-     * The last event-queue cursor this device has consumed + acked (RFP event-channel).
+     * The last event-queue cursor this device has consumed + acked ( event-channel).
      * Shared by the foreground long-poll loop and the background WorkManager drain so
      * delivery is exactly-once across both paths.
      */

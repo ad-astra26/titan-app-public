@@ -10,7 +10,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Truth table for the pure tier selector (RFP_titan_app_event_channel §7.2a). This
+ * Truth table for the pure tier selector. This
  * is the platform-free core of `ConnectionManager`; the Android wiring (loop, FGS,
  * WorkManager) builds on these decisions, so locking them here is the cheapest place
  * to keep the state machine honest.

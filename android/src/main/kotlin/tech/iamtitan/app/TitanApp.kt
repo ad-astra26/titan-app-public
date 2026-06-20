@@ -11,13 +11,13 @@ import tech.iamtitan.app.link.ConnectionManager
  * Process-scoped state the chat send-pipeline needs to survive the Activity being
  * backgrounded or recreated:
  *
- *  - [appScope] — a process-lifetime coroutine scope. The in-flight chat request
- *    runs here (not on the Activity's lifecycleScope) so a reply that is still
- *    awaiting when the Maker backgrounds the app is NOT cancelled. Paired with
- *    `TitanReplyService` (a short foreground service) which keeps the OS from
- *    freezing the process / tearing the socket during that await.
- *  - [isForeground] — whether any Activity is currently started, so the pipeline
- *    knows to post a notification (backgrounded) vs just update the live UI.
+ * [appScope] — a process-lifetime coroutine scope. The in-flight chat request
+ * runs here (not on the Activity's lifecycleScope) so a reply that is still
+ * awaiting when the Maker backgrounds the app is NOT cancelled. Paired with
+ * `TitanReplyService` (a short foreground service) which keeps the OS from
+ * freezing the process / tearing the socket during that await.
+ * [isForeground] — whether any Activity is currently started, so the pipeline
+ * knows to post a notification (backgrounded) vs just update the live UI.
  */
 class TitanApp : Application(), Application.ActivityLifecycleCallbacks {
 
@@ -27,7 +27,7 @@ class TitanApp : Application(), Application.ActivityLifecycleCallbacks {
     val appScope: CoroutineScope = MainScope()
 
     /**
-     * The event-channel drain loop + tier state machine (RFP §7.2a). A process
+     * The event-channel drain loop + tier state machine. A process
      * singleton (constructed lazily on first paired bind) so the held long-poll
      * survives Activity recreation — the per-Activity [TitanController] only binds a
      * renderer + drives lifecycle transitions into it.

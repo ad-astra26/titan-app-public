@@ -7,7 +7,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Cross-language TLS-pin contract (AG-TLS/AD-9). The Android/JVM transport pins
+ * Cross-language TLS-pin contract (/). The Android/JVM transport pins
  * `sha256(leaf-cert-DER)`; the Python agent computes the same value via
  * `tls.cert_pin = sha256(ssl.PEM_cert_to_DER_cert(pem))`. Both hash the leaf DER,
  * so they MUST agree — a drift would silently un-pin the channel.

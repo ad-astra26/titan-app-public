@@ -17,7 +17,7 @@ import tech.iamtitan.app.net.ConsoleClient
 import tech.iamtitan.app.notify.Notifier
 
 /**
- * Headless handler for a Channel-2 action button tap (RFP §7.3 3a, the hybrid-by-stakes
+ * Headless handler for a Channel-2 action button tap ( 3a, the hybrid-by-stakes
  * UX). A low-stakes action's notification button targets this receiver, which signs +
  * POSTs `/console/events/respond` using the device key's 8-hour auth window — no app open.
  *
@@ -38,7 +38,7 @@ class ResponseReceiver : BroadcastReceiver() {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 if (sendHeadless(app, seq, actionId)) {
-                    // Visual ack (RFP §7.3): clear the lingering notification + reflect the
+                    // Visual ack: clear the lingering notification + reflect the
                     // choice in the transcript so the in-app card shows "✓ Acknowledged".
                     Notifier(app).ackSystem(seq, label)
                     PairingStore(app).deviceId?.let {

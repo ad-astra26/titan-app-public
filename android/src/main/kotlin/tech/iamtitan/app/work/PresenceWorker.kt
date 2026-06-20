@@ -19,7 +19,7 @@ import tech.iamtitan.app.presence.PresenceCollector
 import java.util.concurrent.TimeUnit
 
 /**
- * Background presence sampler (RFP_titan_mobile_app Phase 3 / AG6). On the OS cadence it
+ * Background presence sampler ( / ). On the OS cadence it
  * collects ONE opt-in-gated [tech.iamtitan.app.presence.PresenceSample] (AOSP senses only)
  * and uploads it signed to /console/context. Battery-respectful: a periodic wake, no standing
  * service. Signing is best-effort headless via the DeviceKey 8h window (mirrors EventPollWorker);
@@ -36,7 +36,7 @@ class PresenceWorker(context: Context, params: WorkerParameters) :
         val endpoint = store.endpointUrl ?: return Result.success()
         val sample = PresenceCollector.collect(ctx, presence.settings())
             ?: return Result.success() // nothing collectable this cycle
-        // No Activity in a Worker → a lapsed key window can't prompt; sign() then fails and we
+        // No Activity in a Worker → a lapsed key window can't prompt; sign then fails and we
         // skip this cycle gracefully (never crash the scheduler).
         val key = DeviceKey.existing(ctx, store) { error("no activity in background") }
             ?: return Result.success()

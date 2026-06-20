@@ -1,7 +1,7 @@
 package tech.iamtitan.app.crypto
 
 /**
- * Raw Ed25519 — the device-identity signature primitive (SPEC AG3/AG4, §3).
+ * Raw Ed25519 — the device-identity signature primitive (SPEC /,).
  *
  * One contract in `commonMain`, a native `actual` per platform. Both the JVM
  * (tests) and Android (app) actuals are BouncyCastle — IDENTICAL code over the
@@ -11,7 +11,7 @@ package tech.iamtitan.app.crypto
  * in `SigningContractTest`.
  *
  * Keys are RAW bytes: 32-byte seed, 32-byte public key, 64-byte detached signature.
- * The seed at rest is sealed by the platform hardware keystore (AG3) — that
+ * The seed at rest is sealed by the platform hardware keystore — that
  * sealing lives in the platform UI module (Android Keystore + BiometricPrompt),
  * NOT here; this object is the pure math, kept testable.
  */
