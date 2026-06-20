@@ -82,7 +82,13 @@ data class ModuleInfo(
     val name: String? = null,
     val state: String? = null,
     val pid: Int? = null,
-)
+    // the kernel's per-module hot-op policy. null when the backend predates this
+    // (app falls back to offering both). running = state running/booted.
+    @SerialName("can_reload") val canReload: Boolean? = null,
+    @SerialName("can_restart") val canRestart: Boolean? = null,
+) {
+    val running: Boolean get() = state == "running" || state == "booted"
+}
 
 // ── GET /console/journal?lines=N → {service, lines[]} ──
 @Serializable

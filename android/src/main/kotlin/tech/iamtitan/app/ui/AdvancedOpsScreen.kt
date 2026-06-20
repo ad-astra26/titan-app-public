@@ -63,6 +63,7 @@ fun AdvancedOpsScreen(
     // confirm holds a pending (title, message, action); rebootDialog is the typed-phrase gate.
     var confirm by remember { mutableStateOf<Confirm?>(null) }
     var rebootDialog by remember { mutableStateOf(false) }
+    var workersExpanded by remember { mutableStateOf(false) }   // long list — collapsed by default
 
     Column(modifier = Modifier.fillMaxSize().background(TitanInk).systemBarsPadding()) {
         Row(
@@ -92,29 +93,48 @@ fun AdvancedOpsScreen(
                 color = TitanWarn, style = MaterialTheme.typography.bodySmall,
             )
 
-            // ── L2 worker modules ──
-            OpsCard("Workers (L2)") {
-                val modules = ns?.modules?.filter { !it.name.isNullOrBlank() }.orEmpty()
+            // ── L2 worker modules (collapsible — 40+ rows; collapsed by default) ──
+            val modules = ns?.modules?.filter { !it.name.isNullOrBlank() }.orEmpty()
+            val downCount = modules.count { !it.running }
+            CollapsibleOpsCard(
+                title = "Workers (L2)",
+                subtitle = if (modules.isEmpty()) (if (loading) "Loading…" else "unreachable")
+                    else "${modules.size} modules" + (if (downCount > 0) " · $downCount down" else " · all up"),
+                expanded = workersExpanded,
+                onToggle = { workersExpanded = !workersExpanded },
+            ) {
                 if (modules.isEmpty()) {
                     KvMutedOps(if (loading) "Loading…" else "No module roster (Titan unreachable?)")
                 } else {
-                    modules.sortedBy { it.name }.forEach { m ->
+                    // problems first (not-running), then alphabetical
+                    modules.sortedWith(compareBy({ it.running }, { it.name })).forEach { m ->
                         val name = m.name!!
-                        val running = m.state == "running" || m.state == "booted"
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(name, color = TitanText, fontWeight = FontWeight.Medium,
                                     style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                                Text(m.state ?: "?", color = if (running) TitanGood else TitanBad,
+                                Text(m.state ?: "?", color = if (m.running) TitanGood else TitanBad,
                                     style = MaterialTheme.typography.labelMedium)
                             }
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                ActBtn("reload") { onModuleOp("reload", name) }
-                                ActBtn("restart") {
-                                    confirm = Confirm("Restart $name?",
-                                        "Kill-respawns the worker fresh from disk.") { onModuleOp("restart", name) }
+                                if (!m.running) {
+                                    // disabled / crashed / not-booted → only "enable" makes sense
+                                    ActBtn("enable") { onModuleOp("enable", name) }
+                                } else when {
+                                    // running → the ONE correct hot-op per the kernel policy (never both)
+                                    m.canReload == true -> ActBtn("reload") { onModuleOp("reload", name) }
+                                    m.canRestart == true -> ActBtn("restart") {
+                                        confirm = Confirm("Restart $name?",
+                                            "Kill-respawns the worker fresh from disk.") { onModuleOp("restart", name) }
+                                    }
+                                    else -> {  // policy unknown (older backend) → offer both
+                                        ActBtn("reload") { onModuleOp("reload", name) }
+                                        ActBtn("restart") {
+                                            confirm = Confirm("Restart $name?",
+                                                "Kill-respawns the worker fresh from disk.") { onModuleOp("restart", name) }
+                                        }
+                                    }
                                 }
-                                ActBtn("enable") { onModuleOp("enable", name) }
                             }
                         }
                     }
@@ -277,6 +297,32 @@ private fun OpsCard(title: String, content: @Composable () -> Unit) {
         Text(title, color = TitanText, fontWeight = FontWeight.SemiBold,
             style = MaterialTheme.typography.titleSmall)
         content()
+    }
+}
+
+@Composable
+private fun CollapsibleOpsCard(
+    title: String, subtitle: String, expanded: Boolean, onToggle: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .background(TitanSurface).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().clickable { onToggle() },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(title, color = TitanText, fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.titleSmall)
+                Text(subtitle, color = TitanMuted, style = MaterialTheme.typography.bodySmall)
+            }
+            Text(if (expanded) "▲ hide" else "▼ show", color = TitanCyan,
+                style = MaterialTheme.typography.labelLarge)
+        }
+        if (expanded) content()
     }
 }
 
